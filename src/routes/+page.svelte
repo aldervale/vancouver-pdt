@@ -531,7 +531,7 @@
 
 <div class="container">
   <header>
-    <div class="badge">Announced March 2, 2026</div>
+    <div class="eyebrow">B.C. · Announced March 2, 2026</div>
     <h1>No More Clock Changes<br />for Vancouver</h1>
     {#if mode === 'pdt'}
       <p class="subtitle">
@@ -550,43 +550,47 @@
     {/if}
   </header>
 
-  <div class="selector-row">
-    <div class="selector">
-      <label for="wake-slider">Wake up</label>
-      <div class="stepper">
-        <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
-        <span class="stepper-value">{formatHour(wakeHour)}</span>
-        <button onclick={() => { if (wakeHour < 11) wakeHour++ }} aria-label="Later wake time">+</button>
+  <div class="controls-row">
+    <div class="selector-row">
+      <div class="selector">
+        <label for="wake-slider">Wake up</label>
+        <div class="stepper">
+          <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
+          <span class="stepper-value">{formatHour(wakeHour)}</span>
+          <button onclick={() => { if (wakeHour < 11) wakeHour++ }} aria-label="Later wake time">+</button>
+        </div>
+        <input id="wake-slider" type="range" min="4" max="11" bind:value={wakeHour} />
       </div>
-      <input id="wake-slider" type="range" min="4" max="11" bind:value={wakeHour} />
-    </div>
-    <div class="selector">
-      <label for="sleep-slider">Bedtime</label>
-      <div class="stepper">
-        <button onclick={() => { if (sleepHour > 19) sleepHour-- }} aria-label="Earlier bedtime">−</button>
-        <span class="stepper-value">{formatHour(sleepHour)}</span>
-        <button onclick={() => { if (sleepHour < 25) sleepHour++ }} aria-label="Later bedtime">+</button>
+      <div class="selector">
+        <label for="sleep-slider">Bedtime</label>
+        <div class="stepper">
+          <button onclick={() => { if (sleepHour > 19) sleepHour-- }} aria-label="Earlier bedtime">−</button>
+          <span class="stepper-value">{formatHour(sleepHour)}</span>
+          <button onclick={() => { if (sleepHour < 25) sleepHour++ }} aria-label="Later bedtime">+</button>
+        </div>
+        <input id="sleep-slider" type="range" min="19" max="25" bind:value={sleepHour} />
       </div>
-      <input id="sleep-slider" type="range" min="19" max="25" bind:value={sleepHour} />
     </div>
-  </div>
 
-  <div class="mode-toggle">
-    <button class:active={mode === 'pdt'} class="mode-pdt" onclick={() => mode = 'pdt'}>Permanent PDT</button>
-    <button class:active={mode === 'dst'} class="mode-dst" onclick={() => mode = 'dst'}>Old DST</button>
-    <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
+    <div class="mode-toggle" role="group" aria-label="Compare time systems">
+      <button class:active={mode === 'pdt'} class="mode-pdt" onclick={() => mode = 'pdt'}>Permanent PDT</button>
+      <button class:active={mode === 'dst'} class="mode-dst" onclick={() => mode = 'dst'}>Old DST</button>
+      <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
+    </div>
   </div>
 
   <div class="chart-wrapper">
-    <div class="chart-title">Daylight vs. Waking Hours Across the Year</div>
-    <div class="chart-subtitle">
-      {#if mode === 'pdt'}
-        Permanent PDT (UTC−7) · Sunrise &amp; sunset curves plotted against your {formatHour(wakeHour)}–{formatHour(sleepHour)} awake window
-      {:else if mode === 'dst'}
-        Old DST (UTC−8 winter / UTC−7 summer) · Sunrise &amp; sunset curves plotted against your {formatHour(wakeHour)}–{formatHour(sleepHour)} awake window
-      {:else}
-        Permanent PST (UTC−8) · Sunrise &amp; sunset curves plotted against your {formatHour(wakeHour)}–{formatHour(sleepHour)} awake window
-      {/if}
+    <div class="chart-header">
+      <div class="chart-title">Daylight vs. Waking Hours</div>
+      <div class="chart-subtitle">
+        {#if mode === 'pdt'}
+          Permanent PDT (UTC−7) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
+        {:else if mode === 'dst'}
+          Old DST (UTC−8 winter / UTC−7 summer) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
+        {:else}
+          Permanent PST (UTC−8) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
+        {/if}
+      </div>
     </div>
     <div class="canvas-container">
       <canvas bind:this={canvas}></canvas>
@@ -594,11 +598,11 @@
     </div>
     <div class="legend">
       <div class="legend-item">
-        <div class="legend-swatch" style="background: linear-gradient(90deg, rgba(251,191,36,0.5), rgba(240,198,84,0.6));"></div>
+        <div class="legend-swatch swatch-daylight"></div>
         <span>Sunlight while you're awake</span>
       </div>
       <div class="legend-item">
-        <div class="legend-swatch" style="background: repeating-linear-gradient(45deg, #58a6ff33, #58a6ff33 2px, transparent 2px, transparent 4px); border: 1px solid #58a6ff55;"></div>
+        <div class="legend-swatch swatch-missed"></div>
         <span>Sunlight while you're asleep</span>
       </div>
       <div class="legend-item">
@@ -610,33 +614,37 @@
         <span>Sunset</span>
       </div>
       <div class="legend-item">
-        <div class="legend-swatch" style="background: rgba(20,30,60,0.9); border: 1px solid rgba(88,133,255,0.3);"></div>
-        <span>Darkness while you're awake</span>
+        <div class="legend-swatch swatch-dark"></div>
+        <span>Darkness while awake</span>
       </div>
     </div>
   </div>
 
   <div class="stats-strip">
-    <div class="stat-card">
+    <div class="stat-item">
       <div class="stat-number orange">{stats.latestSunrise}</div>
-      <div class="stat-label">Latest sunrise (AM)<br />under {modeLabel}</div>
+      <div class="stat-label">Latest sunrise under {modeLabel}</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-divider"></div>
+    <div class="stat-item">
       <div class="stat-number blue">{stats.earliestSunrise}</div>
-      <div class="stat-label">Earliest sunrise (AM)<br />under {modeLabel}</div>
+      <div class="stat-label">Earliest sunrise</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-divider"></div>
+    <div class="stat-item">
       <div class="stat-number gold">{stats.latestSunset}</div>
-      <div class="stat-label">Latest sunset (PM)<br />under {modeLabel}</div>
+      <div class="stat-label">Latest sunset</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-divider"></div>
+    <div class="stat-item">
       <div class="stat-number gold">{stats.earliestSunset}</div>
-      <div class="stat-label">Earliest sunset (PM)<br />under {modeLabel}</div>
+      <div class="stat-label">Earliest sunset</div>
     </div>
     {#if mode === 'dst'}
-      <div class="stat-card">
-        <div class="stat-number dst-grey">2</div>
-        <div class="stat-label">Clock changes<br />per year</div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div class="stat-number dst-grey">2×</div>
+        <div class="stat-label">Clock changes per year</div>
       </div>
     {/if}
   </div>
@@ -672,49 +680,126 @@
   .container {
     max-width: 1100px;
     margin: 0 auto;
-    padding: 40px 24px 60px;
+    padding: clamp(32px, 5vw, 56px) clamp(20px, 4vw, 32px) 64px;
   }
+
+  /* ─── Header ─────────────────────────────────────────── */
 
   header {
-    text-align: center;
-    margin-bottom: 12px;
+    margin-bottom: 40px;
+    max-width: 720px;
   }
 
-  .badge {
-    display: inline-block;
-    background: linear-gradient(135deg, var(--accent-orange), var(--accent-gold));
-    color: var(--dark-bg);
-    font-weight: 700;
+  .eyebrow {
     font-size: 11px;
+    font-weight: 700;
     letter-spacing: 2px;
     text-transform: uppercase;
-    padding: 6px 16px;
-    border-radius: 20px;
-    margin-bottom: 20px;
+    color: var(--accent-orange);
+    margin-bottom: 16px;
   }
 
   h1 {
     font-family: 'Playfair Display', serif;
     font-weight: 900;
-    font-size: clamp(28px, 5vw, 52px);
-    line-height: 1.1;
-    margin-bottom: 12px;
-    background: linear-gradient(135deg, #fff 40%, var(--accent-gold));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: clamp(30px, 5.5vw, 56px);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    color: #f5f0e8;
+    margin-bottom: 16px;
   }
 
   .subtitle {
     color: var(--text-muted);
     font-size: 15px;
-    max-width: 640px;
-    margin: 0 auto 8px;
-    line-height: 1.5;
+    max-width: 600px;
+    line-height: 1.65;
   }
 
   .subtitle strong {
     color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  /* ─── Controls row ───────────────────────────────────── */
+
+  .controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  /* Wake/Sleep selector */
+  .selector-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .selector {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .selector label {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stepper button {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid #30363d;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .stepper button:hover {
+    border-color: var(--accent-gold);
+    background: rgba(240, 198, 84, 0.08);
+  }
+
+  .stepper button:active {
+    background: rgba(240, 198, 84, 0.14);
+  }
+
+  .stepper-value {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 18px;
+    min-width: 62px;
+    text-align: center;
+    color: var(--text-primary);
+  }
+
+  .selector input[type="range"] {
+    width: 140px;
+    accent-color: var(--accent-gold);
+    cursor: pointer;
   }
 
   /* Mode toggle */
@@ -725,21 +810,25 @@
     border-radius: 24px;
     padding: 4px;
     gap: 2px;
-    width: fit-content;
-    margin: 24px auto 0;
+    flex-shrink: 0;
   }
 
   .mode-toggle button {
     border: none;
     border-radius: 20px;
-    padding: 8px 20px;
+    padding: 8px 18px;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s ease, color 0.2s ease;
     background: transparent;
     color: var(--text-muted);
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+
+  .mode-toggle button:hover:not(.active) {
+    color: var(--text-primary);
   }
 
   .mode-toggle button.mode-pdt.active {
@@ -757,94 +846,32 @@
     color: var(--dark-bg);
   }
 
-  /* Wake/Sleep selector */
-  .selector-row {
-    display: flex;
-    justify-content: center;
-    gap: 40px;
-    margin-top: 28px;
-    flex-wrap: wrap;
-  }
+  /* ─── Chart ──────────────────────────────────────────── */
 
-  .selector {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .selector label {
-    font-size: 10px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    font-weight: 700;
-    color: var(--text-muted);
-  }
-
-  .stepper {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .stepper button {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 1px solid #30363d;
-    background: var(--card-bg);
-    color: var(--text-primary);
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: border-color 0.15s;
-    line-height: 1;
-  }
-
-  .stepper button:hover {
-    border-color: var(--accent-gold);
-  }
-
-  .stepper-value {
-    font-family: 'Playfair Display', serif;
-    font-weight: 700;
-    font-size: 20px;
-    min-width: 70px;
-    text-align: center;
-    color: var(--text-primary);
-  }
-
-  .selector input[type="range"] {
-    width: 160px;
-    accent-color: var(--accent-gold);
-    opacity: 0.6;
-  }
-
-  /* Chart */
   .chart-wrapper {
     background: var(--card-bg);
     border-radius: 16px;
-    padding: 32px 20px 20px;
-    margin-top: 20px;
+    padding: 28px 20px 20px;
     border: 1px solid #30363d;
     position: relative;
     overflow: hidden;
   }
 
+  .chart-header {
+    margin-bottom: 20px;
+  }
+
   .chart-title {
     font-weight: 700;
-    font-size: 15px;
-    margin-bottom: 4px;
+    font-size: 14px;
+    letter-spacing: 0.01em;
     color: var(--text-primary);
+    margin-bottom: 3px;
   }
 
   .chart-subtitle {
     font-size: 12px;
     color: var(--text-muted);
-    margin-bottom: 24px;
   }
 
   .canvas-container {
@@ -867,56 +894,85 @@
   .legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
+    gap: 8px 20px;
     justify-content: center;
-    margin-top: 20px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #21262d;
   }
 
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
+    gap: 7px;
+    font-size: 11.5px;
     color: var(--text-muted);
   }
 
   .legend-swatch {
-    width: 32px;
+    width: 28px;
     height: 10px;
-    border-radius: 3px;
+    border-radius: 2px;
     flex-shrink: 0;
+  }
+
+  .swatch-daylight {
+    background: linear-gradient(90deg, rgba(251,191,36,0.5), rgba(240,198,84,0.6));
+  }
+
+  .swatch-missed {
+    background: repeating-linear-gradient(45deg, #58a6ff33, #58a6ff33 2px, transparent 2px, transparent 4px);
+    border: 1px solid #58a6ff44;
+  }
+
+  .swatch-dark {
+    background: rgba(20,30,60,0.9);
+    border: 1px solid rgba(88,133,255,0.25);
   }
 
   .legend-line-swatch {
-    width: 32px;
+    width: 28px;
     height: 2px;
     border-radius: 1px;
     flex-shrink: 0;
-    align-self: center;
   }
 
-  /* Stats */
+  /* ─── Stats strip ────────────────────────────────────── */
+
   .stats-strip {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin-top: 28px;
-  }
-
-  .stat-card {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin-top: 24px;
     background: var(--card-bg);
     border: 1px solid #30363d;
     border-radius: 12px;
-    padding: 20px;
-    text-align: center;
+    overflow: hidden;
+    flex-wrap: wrap;
+  }
+
+  .stat-item {
+    flex: 1;
+    min-width: 140px;
+    padding: 20px 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stat-divider {
+    width: 1px;
+    background: #21262d;
+    flex-shrink: 0;
+    align-self: stretch;
   }
 
   .stat-number {
     font-family: 'Playfair Display', serif;
     font-weight: 900;
-    font-size: 36px;
+    font-size: clamp(24px, 3vw, 32px);
     line-height: 1;
-    margin-bottom: 4px;
+    letter-spacing: -0.01em;
   }
 
   .stat-number.gold { color: var(--accent-gold); }
@@ -925,12 +981,13 @@
   .stat-number.dst-grey { color: #8b949e; }
 
   .stat-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
     line-height: 1.4;
   }
 
-  /* Insight cards */
+  /* ─── Insight cards ──────────────────────────────────── */
+
   .insight-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -938,66 +995,89 @@
     margin-top: 16px;
   }
 
-  @media (max-width: 640px) {
-    .insight-row { grid-template-columns: 1fr; }
-    .selector-row { gap: 24px; }
-  }
-
   .insight-card {
     background: var(--card-bg);
     border: 1px solid #30363d;
     border-radius: 12px;
-    padding: 20px;
-    position: relative;
-    overflow: hidden;
+    padding: 22px 22px 20px;
   }
-
-  .insight-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-  }
-
-  .insight-card.pro::before { background: linear-gradient(90deg, var(--accent-gold), transparent); }
-  .insight-card.con::before { background: linear-gradient(90deg, var(--accent-orange), transparent); }
 
   .insight-label {
     font-size: 10px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
 
   .insight-card.pro .insight-label { color: var(--accent-gold); }
   .insight-card.con .insight-label { color: var(--accent-orange); }
 
   .insight-text {
-    font-size: 13px;
+    font-size: 13.5px;
     color: var(--text-muted);
-    line-height: 1.6;
+    line-height: 1.65;
   }
 
-  .insight-text strong { color: var(--text-primary); }
+  .insight-text strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  /* ─── Footer ─────────────────────────────────────────── */
 
   footer {
-    text-align: center;
-    margin-top: 40px;
-    color: var(--text-muted);
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid #21262d;
+    color: #6e7681;
     font-size: 11px;
-    opacity: 0.6;
-    line-height: 1.6;
+    line-height: 1.7;
   }
 
   footer a {
-    color: var(--accent-blue, #58a6ff);
+    color: var(--accent-blue);
     text-decoration: none;
   }
 
   footer a:hover {
     text-decoration: underline;
+  }
+
+  /* ─── Responsive ─────────────────────────────────────── */
+
+  @media (max-width: 640px) {
+    .insight-row {
+      grid-template-columns: 1fr;
+    }
+
+    .controls-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .mode-toggle {
+      width: 100%;
+      justify-content: stretch;
+    }
+
+    .mode-toggle button {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 11px;
+    }
+
+    .stat-item {
+      min-width: 120px;
+    }
+  }
+
+  /* ─── Reduced motion ─────────────────────────────────── */
+
+  @media (prefers-reduced-motion: reduce) {
+    .stepper button,
+    .mode-toggle button {
+      transition: none;
+    }
   }
 </style>
