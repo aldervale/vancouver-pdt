@@ -1,52 +1,88 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import SunCalc from 'suncalc';
 
   let canvas: HTMLCanvasElement;
   let overlayCanvas: HTMLCanvasElement;
 
-  // Vancouver sunrise/sunset under permanent PDT (UTC-7)
-  // Mid-month (15th) values in decimal hours (24h clock), UTC-7 year-round
-  // Source: U.S. Naval Observatory API (aa.usno.navy.mil) for 49.25°N, 123.1°W
-  const baseData = [
-    { month: 'Jan', sunrise: 9.03, sunset: 17.70 },  // 9:02 / 5:42 PM
-    { month: 'Feb', sunrise: 8.35, sunset: 18.55 },  // 8:21 / 6:33 PM
-    { month: 'Mar', sunrise: 7.42, sunset: 19.30 },  // 7:25 / 7:18 PM
-    { month: 'Apr', sunrise: 6.33, sunset: 20.08 },  // 6:20 / 8:05 PM
-    { month: 'May', sunrise: 5.48, sunset: 20.82 },  // 5:29 / 8:49 PM
-    { month: 'Jun', sunrise: 5.10, sunset: 21.33 },  // 5:06 / 9:20 PM
-    { month: 'Jul', sunrise: 5.40, sunset: 21.22 },  // 5:24 / 9:13 PM
-    { month: 'Aug', sunrise: 6.07, sunset: 20.47 },  // 6:04 / 8:28 PM
-    { month: 'Sep', sunrise: 6.82, sunset: 19.42 },  // 6:49 / 7:25 PM
-    { month: 'Oct', sunrise: 7.57, sunset: 18.37 },  // 7:34 / 6:22 PM
-    { month: 'Nov', sunrise: 8.38, sunset: 17.50 },  // 8:23 / 5:30 PM
-    { month: 'Dec', sunrise: 9.02, sunset: 17.23 },  // 9:01 / 5:14 PM
-  ];
+  // Vancouver coordinates
+  const LAT = 49.2827;
+  const LNG = -123.1207;
 
-  // DST adjustment: winter months (Jan, Feb, Nov, Dec) shift -1hr
-  const dstData = baseData.map((d, i) =>
-    [0, 1, 10, 11].includes(i)
-      ? { ...d, sunrise: d.sunrise - 1, sunset: d.sunset - 1 }
-      : d
-  );
+  // DST transitions for 2026
+  // Spring forward: second Sunday of March 2026 = March 8
+  // Fall back: first Sunday of November 2026 = November 1
+  const SPRING_FORWARD = new Date(2026, 2, 8); // March 8
+  const FALL_BACK = new Date(2026, 10, 1);     // November 1
 
-  // PST: all months -1hr
-  const pstData = baseData.map(d => ({ ...d, sunrise: d.sunrise - 1, sunset: d.sunset - 1 }));
+  type DayData = {
+    date: Date;
+    dayOfYear: number;
+    label: string;
+    sunrise: number;
+    sunset: number;
+  };
 
-  let wakeHour = $state(7);
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function utcDecimalHours(d: Date): number {
+    return d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
+  }
+
+  function toLocalDecimal(utcH: number, offset: number): number {
+    // offset is negative (e.g. -7 for PDT)
+    let local = utcH + offset;
+    // Handle wrap - sunset can legitimately be > 24 if past midnight, which we want
+    // but realistically Vancouver sunsets are never past midnight
+    if (local < 0) local += 24;
+    return local;
+  }
+
+  function isDstActive(date: Date): boolean {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return d >= SPRING_FORWARD && d < FALL_BACK;
+  }
+
+  function generateDailyData(offsetFn: (date: Date) => number): DayData[] {
+    const result: DayData[] = [];
+    for (let month = 0; month < 12; month++) {
+      const daysInMonth = new Date(2026, month + 1, 0).getDate();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(2026, month, day);
+        const dayOfYear = Math.round((date.getTime() - new Date(2026, 0, 1).getTime()) / 86400000) + 1;
+        const times = SunCalc.getTimes(date, LAT, LNG);
+        const offset = offsetFn(date);
+        const sunrise = toLocalDecimal(utcDecimalHours(times.sunrise), offset);
+        const sunset = toLocalDecimal(utcDecimalHours(times.sunset), offset);
+        const label = `${MONTH_NAMES[month]} ${day}`;
+        result.push({ date, dayOfYear, label, sunrise, sunset });
+      }
+    }
+    return result;
+  }
+
+  // PDT: permanent UTC-7
+  const pdtData = generateDailyData(() => -7);
+
+  // DST: old system — UTC-8 winter, UTC-7 summer
+  const dstData = generateDailyData((date) => isDstActive(date) ? -7 : -8);
+
+  // PST: permanent UTC-8
+  const pstData = generateDailyData(() => -8);
+
+  let wakeHour = $state(4);
   let sleepHour = $state(23);
   let mode: 'pdt' | 'dst' | 'pst' = $state('pdt');
 
   const activeData = $derived(
-    mode === 'pdt' ? baseData : mode === 'dst' ? dstData : pstData
-  );
-
-  const accentColor = $derived(
-    mode === 'pdt' ? 'var(--accent-gold)' : mode === 'dst' ? '#8b949e' : 'var(--accent-blue)'
+    mode === 'pdt' ? pdtData : mode === 'dst' ? dstData : pstData
   );
 
   function formatHour(h: number): string {
-    const period = h < 12 || h >= 24 ? 'AM' : 'PM';
-    let display = h % 12;
+    const normalized = h % 24;
+    const period = normalized < 12 ? 'AM' : 'PM';
+    let display = normalized % 12;
     if (display === 0) display = 12;
     return `${display} ${period}`;
   }
@@ -65,23 +101,10 @@
     return `${h12}:${min.toString().padStart(2, '0')} ${suffix}`;
   }
 
-  // Catmull-Rom spline interpolation for smooth curves
-  function catmullRomPoints(pts: {x: number, y: number}[], segments = 20): {x: number, y: number}[] {
-    const result: {x: number, y: number}[] = [];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[Math.max(0, i - 1)];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[Math.min(pts.length - 1, i + 2)];
-      for (let t = 0; t <= 1; t += 1 / segments) {
-        const t2 = t * t;
-        const t3 = t2 * t;
-        const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
-        const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
-        result.push({ x, y });
-      }
-    }
-    return result;
+  function fmtDayLength(hours: number): string {
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return `${h}h ${m}m`;
   }
 
   // Compute stats from active dataset
@@ -111,6 +134,9 @@
     mode === 'pdt' ? 'permanent PDT' : mode === 'dst' ? 'old DST' : 'permanent PST'
   );
 
+  // Month start day-of-year values (1-indexed)
+  const MONTH_START_DOY = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
+
   function draw() {
     if (!canvas) return;
     const data = activeData;
@@ -136,28 +162,26 @@
 
     const padLeft = 80;
     const padRight = 70;
-    const padTop = 10;
+    const padTop = mode === 'dst' ? 36 : 10;
     const padBottom = 40;
 
     const chartW = W - padLeft - padRight;
     const chartH = H - padTop - padBottom;
 
     const yMin = 4;
-    const yMax = 23;
+    const yMax = 26;
 
     function yPos(hour: number) {
       return padTop + (hour - yMin) / (yMax - yMin) * chartH;
     }
 
-    function xPos(i: number) {
-      return padLeft + (i / (data.length - 1)) * chartW;
+    function xPosDoy(dayOfYear: number) {
+      return padLeft + ((dayOfYear - 1) / 364) * chartW;
     }
 
-    const colW = chartW / data.length;
     const wakeY = yPos(WAKE);
     const sleepY = yPos(SLEEP);
 
-    // Determine fill colors based on mode
     const goldFillStart = mode === 'pdt' ? 'rgba(251, 191, 36, 0.40)'
       : mode === 'dst' ? 'rgba(139, 148, 158, 0.30)'
       : 'rgba(88, 166, 255, 0.35)';
@@ -168,40 +192,45 @@
       : mode === 'dst' ? 'rgba(139, 148, 158, 0.25)'
       : 'rgba(88, 130, 255, 0.30)';
 
-    // Single dark background
+    // Background
     ctx.fillStyle = DARK_BG;
     ctx.fillRect(padLeft, padTop, chartW, chartH);
 
-    // Waking window — subtle warm tint
+    // Waking window tint
     ctx.fillStyle = 'rgba(230, 220, 200, 0.04)';
     ctx.fillRect(padLeft, wakeY, chartW, sleepY - wakeY);
 
-    // Darkness while awake — pre-dawn and evening fills
-    data.forEach((d, i) => {
-      const cx = xPos(i);
-      const halfCol = (i === 0 || i === data.length - 1) ? chartW / (data.length - 1) / 2 : chartW / (data.length - 1) / 2;
-      const colLeft = Math.max(padLeft, cx - halfCol);
-      const colRight = Math.min(padLeft + chartW, cx + halfCol);
-      const w = colRight - colLeft;
-      // Pre-dawn: awake but dark before sunrise
+    // Build points using dayOfYear
+    const sunrisePts = data.map(d => ({ x: xPosDoy(d.dayOfYear), y: yPos(d.sunrise) }));
+    const sunsetPts = data.map(d => ({ x: xPosDoy(d.dayOfYear), y: yPos(d.sunset) }));
+
+    // Darkness while awake — draw per-day columns
+    // We downsample to every ~3 days for performance
+    for (let i = 0; i < data.length; i += 3) {
+      const d = data[i];
+      const x = xPosDoy(d.dayOfYear);
+      const nextX = i + 3 < data.length ? xPosDoy(data[i + 3].dayOfYear) : padLeft + chartW;
+      const w = nextX - x;
+
       if (d.sunrise > WAKE) {
         const sunriseY = yPos(d.sunrise);
         ctx.fillStyle = 'rgba(20, 30, 60, 0.65)';
-        ctx.fillRect(colLeft, wakeY, w, sunriseY - wakeY);
+        ctx.fillRect(x, wakeY, w, sunriseY - wakeY);
       }
-      // Evening: awake but dark after sunset
       if (d.sunset < SLEEP) {
         const sunsetY = yPos(d.sunset);
         ctx.fillStyle = 'rgba(20, 30, 60, 0.65)';
-        ctx.fillRect(colLeft, sunsetY, w, sleepY - sunsetY);
+        ctx.fillRect(x, sunsetY, w, sleepY - sunsetY);
       }
-    });
+    }
 
-    // Build spline points for sunrise and sunset
-    const sunrisePts = data.map((d, i) => ({ x: xPos(i), y: yPos(d.sunrise) }));
-    const sunsetPts = data.map((d, i) => ({ x: xPos(i), y: yPos(d.sunset) }));
-    const sunriseSpline = catmullRomPoints(sunrisePts, 24);
-    const sunsetSpline = catmullRomPoints(sunsetPts, 24);
+    function traceCurveFwd(pts: {x: number, y: number}[]) {
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    }
+
+    function traceCurveBwd(pts: {x: number, y: number}[]) {
+      for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].y);
+    }
 
     // Fill: sunlight during waking hours
     ctx.save();
@@ -210,10 +239,8 @@
     ctx.clip();
 
     ctx.beginPath();
-    sunriseSpline.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    for (let i = sunsetSpline.length - 1; i >= 0; i--) {
-      ctx.lineTo(sunsetSpline[i].x, sunsetSpline[i].y);
-    }
+    traceCurveFwd(sunrisePts);
+    traceCurveBwd(sunsetPts);
     ctx.closePath();
     const goldGrad = ctx.createLinearGradient(0, wakeY, 0, sleepY);
     goldGrad.addColorStop(0, goldFillStart);
@@ -223,22 +250,18 @@
     ctx.fill();
     ctx.restore();
 
-    // Fill: "wasted" sun before wake time — blue hatching
+    // Fill: "wasted" sun before wake — hatching
     ctx.save();
     ctx.beginPath();
     ctx.rect(padLeft, padTop, chartW, wakeY - padTop);
     ctx.clip();
 
-    // Clip to the daylight area (between sunrise and sunset curves)
     ctx.beginPath();
-    sunriseSpline.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    for (let i = sunsetSpline.length - 1; i >= 0; i--) {
-      ctx.lineTo(sunsetSpline[i].x, sunsetSpline[i].y);
-    }
+    traceCurveFwd(sunrisePts);
+    traceCurveBwd(sunsetPts);
     ctx.closePath();
     ctx.clip();
 
-    // Draw blue diagonal hatching
     ctx.strokeStyle = 'rgba(88, 166, 255, 0.22)';
     ctx.lineWidth = 1;
     for (let ly = padTop - chartW; ly < wakeY + chartW; ly += 6) {
@@ -249,17 +272,15 @@
     }
     ctx.restore();
 
-    // Fill: sun after sleep time — also hatched but dimmer
+    // Fill: sun after sleep — hatching
     ctx.save();
     ctx.beginPath();
     ctx.rect(padLeft, sleepY, chartW, padTop + chartH - sleepY);
     ctx.clip();
 
     ctx.beginPath();
-    sunriseSpline.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    for (let i = sunsetSpline.length - 1; i >= 0; i--) {
-      ctx.lineTo(sunsetSpline[i].x, sunsetSpline[i].y);
-    }
+    traceCurveFwd(sunrisePts);
+    traceCurveBwd(sunsetPts);
     ctx.closePath();
     ctx.clip();
 
@@ -273,23 +294,21 @@
     }
     ctx.restore();
 
-    // DST annotation markers
+    // DST annotations — spring forward day 67 (March 8), fall back day 305 (Nov 1)
     if (mode === 'dst') {
-      const springX = (xPos(1) + xPos(2)) / 2;
-      const fallX = (xPos(9) + xPos(10)) / 2;
+      const springX = xPosDoy(67);
+      const fallX = xPosDoy(305);
 
       ctx.save();
       ctx.strokeStyle = 'rgba(139, 148, 158, 0.35)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 3]);
 
-      // Spring forward line
       ctx.beginPath();
       ctx.moveTo(springX, padTop);
       ctx.lineTo(springX, padTop + chartH);
       ctx.stroke();
 
-      // Fall back line
       ctx.beginPath();
       ctx.moveTo(fallX, padTop);
       ctx.lineTo(fallX, padTop + chartH);
@@ -297,16 +316,49 @@
 
       ctx.setLineDash([]);
 
-      // Labels above chart
-      ctx.fillStyle = '#8b949e';
       ctx.font = '600 9px "DM Sans"';
       ctx.textAlign = 'center';
-      ctx.fillText('\u25B2 Spring Forward', springX, padTop - 14 + 10);
-      ctx.fillText('\u25BC Fall Back', fallX, padTop - 14 + 10);
+
+      const labelY = padTop + 14;
+      const springLabel = '▲ Spring Forward';
+      const fallLabel = '▼ Fall Back';
+      const springW = ctx.measureText(springLabel).width + 12;
+      const fallW = ctx.measureText(fallLabel).width + 12;
+      const badgeH = 16;
+      const badgeR = 3;
+
+      ctx.fillStyle = 'rgba(20, 28, 40, 0.82)';
+      ctx.beginPath();
+      ctx.roundRect(springX - springW / 2, labelY - 11, springW, badgeH, badgeR);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(139, 148, 158, 0.4)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.roundRect(springX - springW / 2, labelY - 11, springW, badgeH, badgeR);
+      ctx.stroke();
+
+      ctx.fillStyle = '#a8b3bf';
+      ctx.fillText(springLabel, springX, labelY);
+
+      ctx.fillStyle = 'rgba(20, 28, 40, 0.82)';
+      ctx.beginPath();
+      ctx.roundRect(fallX - fallW / 2, labelY - 11, fallW, badgeH, badgeR);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(139, 148, 158, 0.4)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.roundRect(fallX - fallW / 2, labelY - 11, fallW, badgeH, badgeR);
+      ctx.stroke();
+
+      ctx.fillStyle = '#a8b3bf';
+      ctx.fillText(fallLabel, fallX, labelY);
+
       ctx.restore();
     }
 
-    // Wake / sleep horizontal lines
+    // Wake / sleep dashed lines
     ctx.strokeStyle = 'rgba(230, 237, 243, 0.25)';
     ctx.lineWidth = 1;
     ctx.setLineDash([8, 4]);
@@ -320,39 +372,38 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Wake/sleep labels
     ctx.fillStyle = 'rgba(230, 237, 243, 0.5)';
     ctx.font = '600 9px "DM Sans"';
     ctx.textAlign = 'right';
     ctx.fillText(`WAKE ${formatHour(WAKE)}`, padLeft - 6, wakeY + 3);
     ctx.fillText(`SLEEP ${formatHour(SLEEP)}`, padLeft - 6, sleepY + 3);
 
-    // Sunrise curve (orange/red) — smooth catmull-rom
+    // Sunrise curve
     ctx.strokeStyle = '#e76f51';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    sunriseSpline.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    traceCurveFwd(sunrisePts);
     ctx.stroke();
 
-    // Sunset curve (gold/yellow)
+    // Sunset curve
     ctx.strokeStyle = '#f0c654';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    sunsetSpline.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    traceCurveFwd(sunsetPts);
     ctx.stroke();
 
-    // Curve labels
+    // Curve labels (right side, at Dec 31 = day 365)
     ctx.font = '600 10px "DM Sans"';
     ctx.fillStyle = '#e76f51';
     ctx.textAlign = 'left';
-    ctx.fillText('SUNRISE', padLeft + chartW + 8, yPos(data[11].sunrise) + 3);
+    ctx.fillText('SUNRISE', padLeft + chartW + 8, yPos(data[364].sunrise) + 3);
     ctx.fillStyle = '#f0c654';
-    ctx.fillText('SUNSET', padLeft + chartW + 8, yPos(data[11].sunset) + 3);
+    ctx.fillText('SUNSET', padLeft + chartW + 8, yPos(data[364].sunset) + 3);
 
-    // Y-axis hour labels
+    // Y-axis labels
     ctx.font = '500 10px "DM Sans"';
     ctx.textAlign = 'right';
-    for (let h = 5; h <= 22; h++) {
+    for (let h = 5; h <= 26; h++) {
       if (h === WAKE || h === SLEEP) continue;
       const y = yPos(h);
       if (h === 12) {
@@ -363,43 +414,31 @@
         ctx.moveTo(padLeft, y);
         ctx.lineTo(padLeft + chartW, y);
         ctx.stroke();
+      } else if (h === 24) {
+        ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
+        ctx.fillText('12 AM', padLeft - 6, y + 3);
+      } else if (h === 25) {
+        ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
+        ctx.fillText('1 AM', padLeft - 6, y + 3);
+      } else if (h === 26) {
+        ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
+        ctx.fillText('2 AM', padLeft - 6, y + 3);
       } else {
         ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
-        const label = h <= 12 ? `${h} AM` : `${h - 12} PM`;
+        const label = h < 12 ? `${h} AM` : `${h - 12} PM`;
         ctx.fillText(label, padLeft - 6, y + 3);
       }
     }
 
-    // X-axis month labels
+    // X-axis: month labels at 1st of each month
     ctx.fillStyle = TEXT_MUTED;
     ctx.font = '600 11px "DM Sans"';
     ctx.textAlign = 'center';
-    data.forEach((d, i) => {
-      ctx.fillText(d.month, xPos(i), padTop + chartH + 24);
+    MONTH_START_DOY.forEach((doy, i) => {
+      ctx.fillText(MONTH_NAMES[i], xPosDoy(doy), padTop + chartH + 24);
     });
 
-    // Dot markers
-    data.forEach((d, i) => {
-      const x = xPos(i);
-
-      ctx.beginPath();
-      ctx.arc(x, yPos(d.sunrise), 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#e76f51';
-      ctx.fill();
-      ctx.strokeStyle = DARK_BG;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(x, yPos(d.sunset), 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#f0c654';
-      ctx.fill();
-      ctx.strokeStyle = DARK_BG;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    });
-
-    // Key time labels on the chart — find actual extremes
+    // Min/max time labels on curves
     const maxSunriseIdx = data.reduce((mi, d, i, arr) => d.sunrise > arr[mi].sunrise ? i : mi, 0);
     const minSunriseIdx = data.reduce((mi, d, i, arr) => d.sunrise < arr[mi].sunrise ? i : mi, 0);
     const maxSunsetIdx = data.reduce((mi, d, i, arr) => d.sunset > arr[mi].sunset ? i : mi, 0);
@@ -408,18 +447,16 @@
     ctx.font = '700 9px "DM Sans"';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#e76f51';
-    ctx.fillText(decimalToTime(data[maxSunriseIdx].sunrise), xPos(maxSunriseIdx), yPos(data[maxSunriseIdx].sunrise) - 8);
-    ctx.fillText(decimalToTime(data[minSunriseIdx].sunrise), xPos(minSunriseIdx), yPos(data[minSunriseIdx].sunrise) - 8);
+    ctx.fillText(decimalToTime(data[maxSunriseIdx].sunrise), xPosDoy(data[maxSunriseIdx].dayOfYear), yPos(data[maxSunriseIdx].sunrise) - 8);
+    ctx.fillText(decimalToTime(data[minSunriseIdx].sunrise), xPosDoy(data[minSunriseIdx].dayOfYear), yPos(data[minSunriseIdx].sunrise) - 8);
     ctx.fillStyle = '#f0c654';
-    ctx.fillText(decimalToTime(data[maxSunsetIdx].sunset), xPos(maxSunsetIdx), yPos(data[maxSunsetIdx].sunset) + 15);
-    ctx.fillText(decimalToTime(data[minSunsetIdx].sunset), xPos(minSunsetIdx), yPos(data[minSunsetIdx].sunset) + 15);
+    ctx.fillText(decimalToTime(data[maxSunsetIdx].sunset), xPosDoy(data[maxSunsetIdx].dayOfYear), yPos(data[maxSunsetIdx].sunset) + 15);
+    ctx.fillText(decimalToTime(data[minSunsetIdx].sunset), xPosDoy(data[minSunsetIdx].dayOfYear), yPos(data[minSunsetIdx].sunset) + 15);
 
-    // Save layout for tooltip
     chartLayout = { padLeft, padTop, chartW, chartH, W, H, yMin, yMax };
   }
 
-  // Store chart layout for tooltip use
-  let chartLayout = $state({ padLeft: 0, padTop: 0, chartW: 0, chartH: 0, W: 0, H: 0, yMin: 4, yMax: 23 });
+  let chartLayout = $state({ padLeft: 0, padTop: 0, chartW: 0, chartH: 0, W: 0, H: 0, yMin: 4, yMax: 26 });
 
   function setupOverlay() {
     if (!overlayCanvas || !canvas) return;
@@ -445,15 +482,17 @@
     ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     ctx.scale(dpr, dpr);
 
-    // Determine which month column
     const relX = mx - padLeft;
     if (relX < 0 || relX > chartW || my < padTop || my > padTop + chartH) return;
 
-    // Find closest month index
-    let monthIdx = Math.round(relX / chartW * (data.length - 1));
-    monthIdx = Math.max(0, Math.min(data.length - 1, monthIdx));
+    // Snap to nearest day index (0–364)
+    let dayIdx = Math.round(relX / chartW * 364);
+    dayIdx = Math.max(0, Math.min(364, dayIdx));
 
-    const cx = padLeft + (monthIdx / (data.length - 1)) * chartW;
+    const d = data[dayIdx];
+    if (!d) return;
+
+    const cx = padLeft + ((d.dayOfYear - 1) / 364) * chartW;
 
     // Vertical indicator line
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
@@ -463,24 +502,27 @@
     ctx.lineTo(cx, padTop + chartH);
     ctx.stroke();
 
-    // Tooltip box
-    const d = data[monthIdx];
+    // Tooltip content
+    const monthName = MONTH_FULL[d.date.getMonth()];
+    const dayNum = d.date.getDate();
+    const fullDate = `${monthName} ${dayNum}`;
+    const dayLength = d.sunset - d.sunrise;
     const lines = [
-      d.month,
-      `🌅 Sunrise: ${fmtTime(d.sunrise)}`,
-      `🌇 Sunset: ${fmtTime(d.sunset)}`,
+      fullDate,
+      `🌅 ${fmtTime(d.sunrise)}`,
+      `🌇 ${fmtTime(d.sunset)}`,
+      `☀️ ${fmtDayLength(dayLength)}`,
     ];
 
-    ctx.font = '600 13px "DM Sans"';
-    const boldWidth = ctx.measureText(d.month).width;
+    ctx.font = '700 13px "DM Sans"';
+    const titleW = ctx.measureText(fullDate).width;
     ctx.font = '400 12px "DM Sans"';
     const lineWidths = lines.slice(1).map(l => ctx.measureText(l).width);
-    const boxW = Math.max(boldWidth, ...lineWidths) + 28;
-    const boxH = 68;
+    const boxW = Math.max(titleW, ...lineWidths) + 28;
+    const boxH = 84;
 
     let tx = mx + 14;
     let ty = my - boxH / 2;
-    // Keep within canvas
     if (tx + boxW > padLeft + chartW) tx = mx - boxW - 14;
     if (ty < padTop) ty = padTop;
     if (ty + boxH > padTop + chartH) ty = padTop + chartH - boxH;
@@ -496,11 +538,16 @@
     ctx.fillStyle = '#e6edf3';
     ctx.font = '700 13px "DM Sans"';
     ctx.textAlign = 'left';
-    ctx.fillText(d.month, tx + 14, ty + 20);
+    ctx.fillText(fullDate, tx + 14, ty + 20);
     ctx.font = '400 12px "DM Sans"';
     ctx.fillText(lines[1], tx + 14, ty + 38);
-    ctx.fillText(lines[2], tx + 14, ty + 56);
+    ctx.fillText(lines[2], tx + 14, ty + 54);
+    ctx.fillStyle = TEXT_MUTED;
+    ctx.fillText(lines[3], tx + 14, ty + 70);
   }
+
+  // Need TEXT_MUTED accessible in handleMouseMove
+  const TEXT_MUTED = '#8b949e';
 
   function handleMouseLeave() {
     if (!overlayCanvas) return;
@@ -509,7 +556,6 @@
   }
 
   $effect(() => {
-    // Access reactive state to trigger redraw
     wakeHour;
     sleepHour;
     mode;
@@ -533,21 +579,11 @@
   <header>
     <div class="eyebrow">B.C. · Announced March 2, 2026</div>
     <h1>No More Clock Changes<br />for Vancouver</h1>
-    {#if mode === 'pdt'}
-      <p class="subtitle">
-        B.C. is adopting <strong>permanent daylight time (UTC−7)</strong> after the final spring-forward
-        on March 8, 2026. Here's how it reshapes the daylight you'll actually experience during your
-        waking hours.
-      </p>
-    {:else if mode === 'dst'}
-      <p class="subtitle">
-        How daylight looked under the old clock-change system — spring forward in March, fall back in November.
-      </p>
-    {:else}
-      <p class="subtitle">
-        The alternative B.C. rejected — permanent standard time (UTC−8). Brighter mornings, darker evenings, all year.
-      </p>
-    {/if}
+    <p class="subtitle">
+      B.C. is adopting <strong>permanent daylight time (UTC−7)</strong> after the final spring-forward
+      on March 8, 2026. Here's how it reshapes the daylight you'll actually experience during your
+      waking hours.
+    </p>
   </header>
 
   <div class="controls-row">
@@ -557,18 +593,18 @@
         <div class="stepper">
           <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
           <span class="stepper-value">{formatHour(wakeHour)}</span>
-          <button onclick={() => { if (wakeHour < 11) wakeHour++ }} aria-label="Later wake time">+</button>
+          <button onclick={() => { if (wakeHour < 12) wakeHour++ }} aria-label="Later wake time">+</button>
         </div>
-        <input id="wake-slider" type="range" min="4" max="11" bind:value={wakeHour} />
+        <input id="wake-slider" type="range" min="4" max="12" bind:value={wakeHour} />
       </div>
       <div class="selector">
         <label for="sleep-slider">Bedtime</label>
         <div class="stepper">
-          <button onclick={() => { if (sleepHour > 19) sleepHour-- }} aria-label="Earlier bedtime">−</button>
+          <button onclick={() => { if (sleepHour > 18) sleepHour-- }} aria-label="Earlier bedtime">−</button>
           <span class="stepper-value">{formatHour(sleepHour)}</span>
-          <button onclick={() => { if (sleepHour < 25) sleepHour++ }} aria-label="Later bedtime">+</button>
+          <button onclick={() => { if (sleepHour < 26) sleepHour++ }} aria-label="Later bedtime">+</button>
         </div>
-        <input id="sleep-slider" type="range" min="19" max="25" bind:value={sleepHour} />
+        <input id="sleep-slider" type="range" min="18" max="26" bind:value={sleepHour} />
       </div>
     </div>
 
@@ -578,6 +614,16 @@
       <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
     </div>
   </div>
+
+  {#if mode !== 'pdt'}
+    <div class="mode-note">
+      {#if mode === 'dst'}
+        For comparison: how daylight looked under the old clock-change system.
+      {:else}
+        The alternative B.C. rejected — permanent standard time (UTC−8).
+      {/if}
+    </div>
+  {/if}
 
   <div class="chart-wrapper">
     <div class="chart-header">
@@ -669,8 +715,8 @@
   </div>
 
   <footer>
-    Sunrise/sunset data from the <a href="https://aa.usno.navy.mil/data/rstt" target="_blank" rel="noopener">U.S. Naval Observatory</a>
-    for Vancouver (49.25°N, 123.1°W) under permanent UTC−7, mid-month values.
+    Sunrise/sunset computed with <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>
+    for Vancouver (49.28°N, 123.12°W), daily values for 2026.
     Waking window is user-configurable above.
     B.C. legislation passed March 2026. Permanent PDT takes effect after the final spring-forward on March 8, 2026.
   </footer>
@@ -732,7 +778,6 @@
     flex-wrap: wrap;
   }
 
-  /* Wake/Sleep selector */
   .selector-row {
     display: flex;
     gap: 32px;
@@ -844,6 +889,15 @@
   .mode-toggle button.mode-pst.active {
     background: var(--accent-blue);
     color: var(--dark-bg);
+  }
+
+  /* ─── Mode note ──────────────────────────────────────── */
+
+  .mode-note {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-style: italic;
   }
 
   /* ─── Chart ──────────────────────────────────────────── */
