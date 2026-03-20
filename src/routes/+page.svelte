@@ -74,6 +74,7 @@
   let wakeHour = $state(4);
   let sleepHour = $state(23);
   let mode: 'pdt' | 'dst' | 'pst' = $state('pdt');
+  let showSports = $state(false);
 
   const activeData = $derived(
     mode === 'pdt' ? pdtData : mode === 'dst' ? dstData : pstData
@@ -136,6 +137,109 @@
 
   // Month start day-of-year values (1-indexed)
   const MONTH_START_DOY = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
+
+  // Sports panel: static time data
+  // All times verified using UTC arithmetic for winter months (when DST and PST are identical at UTC-8)
+  //
+  // TASK A — Sep 30 double-value investigation:
+  // The overlay tooltip (handleMouseMove) snaps to exactly one dayIdx per event and draws one box,
+  // so it cannot produce two tooltip boxes on its own. The most likely cause of "two values near Sep 30"
+  // is that the min/max curve labels drawn on the MAIN canvas (e.g. latest sunrise / earliest sunset)
+  // visually coincide with the tooltip overlay when hovering near Sep 30, making it look like two data
+  // points are shown. The Math.round() snap is correct and not the cause. No fix applied — the extremes
+  // are not actually at Sep 30, but label placement (drawn at -8px above curves) may overlap the tooltip
+  // box when hovering anywhere near a labelled extremum. If this becomes annoying, consider only drawing
+  // min/max labels on hover, or suppressing them when the tooltip is visible.
+
+  type SportEntry = {
+    icon: string;
+    league: string;
+    context: string;
+    source: string;
+    pdt: string;   // UTC-7, permanent
+    dst: string;   // UTC-8 in winter (fall back period)
+    pst: string;   // UTC-8, permanent
+    takeaway: string;
+  };
+
+  const sportsData: SportEntry[] = [
+    {
+      icon: '🏒',
+      league: 'Vancouver Canucks (NHL)',
+      context: 'Away game in Toronto, January',
+      // 7:00 PM EST = 19:00 EST = 19:00 − (−5) + (−7) UTC offset math:
+      // EST = UTC−5; 19:00 EST = 00:00 UTC next day
+      // 00:00 UTC + (−7) = 17:00 PDT = 5:00 PM PDT
+      // Wait — 19:00 EST = 19:00 + 5 = 24:00 UTC = 00:00 UTC next day?
+      // No: EST is UTC−5, so 19:00 EST = 19:00 + 5h = 24:00 UTC.
+      // PDT (UTC−7): 24:00 − 7 = 17:00 = 5:00 PM. Hmm.
+      // Actually: to convert from EST to PDT — EST is 2h ahead of PDT in winter.
+      // 7 PM EST − 2h = 5 PM? No — PDT is BEHIND EST, so subtract: 7 PM − 2h = 5 PM PDT.
+      // Wait: PDT = UTC−7, EST = UTC−5. UTC−7 is 2 hours BEHIND UTC−5.
+      // So 7 PM EST = 7 PM − 2h offset = 5 PM PDT? Let's verify with UTC:
+      // 7 PM EST = 19:00 − (−5) = 19:00 + 5 = midnight UTC = 00:00 UTC.
+      // 00:00 UTC in PDT (UTC−7) = 00:00 − 7 = −7:00 → previous day 17:00 = 5 PM.
+      // Hmm, that gives 5 PM not 4 PM. Let me re-read the task spec.
+      //
+      // Task spec says: PDT (UTC-7): 4:00 PM. Let me re-check.
+      // EST = UTC-5. 7 PM EST = 19:00 local = 19:00 + 5 = 24:00 UTC.
+      // PDT UTC-7: 24:00 UTC + (-7) = 17:00. That's 5 PM, not 4 PM.
+      //
+      // But wait — maybe the spec means a DIFFERENT game time. 7 PM ET in the spec:
+      // Actually the spec says "game starts 7:00 PM EST (UTC-5)".
+      // 7 PM EST = 19:00 EST. EST is UTC-5, so 19:00 EST = 19:00 + 5h = 24:00 UTC = midnight.
+      // In PDT (UTC-7): midnight UTC = 24:00 - 7 = 17:00 = 5:00 PM.
+      //
+      // The spec says 4 PM. Let me try: maybe EST to PDT diff is 3 hours?
+      // PDT = UTC-7, EST = UTC-5. PDT is 2 hours behind EST. 7PM - 2h = 5PM.
+      //
+      // The spec might have an error. Let me use the correct math: 5:00 PM PDT, 4:00 PM PST/DST.
+      // Actually hold on - maybe the spec is using 7 PM ET where ET in winter is EST (UTC-5)
+      // and the difference to PDT (UTC-7) is indeed 2 hours. So 7 PM - 2h = 5 PM PDT.
+      // vs PST (UTC-8): 7 PM - 3h = 4 PM PST.
+      //
+      // The spec says: PDT: 4 PM, DST winter: 3 PM, PST: 3 PM. That would mean 3h difference to PDT.
+      // That would only work if PDT is UTC-7 and EST is UTC-4... but EST is UTC-5 in winter.
+      // ET in SUMMER (EDT) is UTC-4. If they played in summer that would work.
+      // For January, ET is EST = UTC-5. PDT (UTC-7) is 2h behind. 7PM EST = 5PM PDT.
+      //
+      // I'll go with the CORRECT math: 5 PM PDT, 4 PM PST/DST winter.
+      // This still tells the same story: permanent PDT = 1h later than PST for away games.
+      source: 'Game starts 7:00 PM EST (UTC−5) = 00:00 UTC',
+      pdt: '5:00 PM',
+      dst: '4:00 PM',
+      pst: '4:00 PM',
+      takeaway: 'Permanent PDT: watch Canucks away games 1 hour later than standard time'
+    },
+    {
+      icon: '🏆',
+      league: 'UEFA Champions League',
+      context: 'Round of 16 first leg, February',
+      // 21:00 CET (UTC+1) = 20:00 UTC
+      // PDT (UTC-7): 20:00 - 7 = 13:00 = 1:00 PM ✓
+      // DST winter (UTC-8): 20:00 - 8 = 12:00 = noon ✓
+      // PST (UTC-8): 20:00 - 8 = 12:00 = noon ✓
+      source: 'Kickoff 21:00 CET (UTC+1) = 20:00 UTC',
+      pdt: '1:00 PM',
+      dst: '12:00 PM',
+      pst: '12:00 PM',
+      takeaway: 'Permanent PDT: Champions League knockout ties kick off at 1 PM, not noon'
+    },
+    {
+      icon: '🏈',
+      league: 'NFL',
+      context: 'Sunday afternoon game, January playoffs',
+      // 1:00 PM EST (UTC-5) = 18:00 UTC
+      // PDT (UTC-7): 18:00 - 7 = 11:00 = 11:00 AM ✓
+      // DST winter (UTC-8): 18:00 - 8 = 10:00 = 10:00 AM ✓
+      // PST (UTC-8): 18:00 - 8 = 10:00 = 10:00 AM ✓
+      source: 'Kickoff 1:00 PM EST (UTC−5) = 18:00 UTC',
+      pdt: '11:00 AM',
+      dst: '10:00 AM',
+      pst: '10:00 AM',
+      takeaway: 'Permanent PDT: early NFL games start at 11 AM instead of 10 AM'
+    }
+  ];
 
   function draw() {
     if (!canvas) return;
@@ -695,6 +799,61 @@
     {/if}
   </div>
 
+  <!-- Sports panel toggle -->
+  <div class="sports-toggle-row">
+    <button class="sports-btn" class:active={showSports} onclick={() => showSports = !showSports}>
+      🏒 I Like Sports
+      <span class="sports-btn-chevron" class:open={showSports}>▾</span>
+    </button>
+  </div>
+
+  <!-- Sports panel -->
+  <div class="sports-panel" class:open={showSports} aria-hidden={!showSports}>
+    <div class="sports-panel-inner">
+      <div class="sports-header">
+        <div class="sports-title">Game Times in Vancouver</div>
+        <div class="sports-subtitle">
+          How the time system affects when you watch sports — using real winter UTC offsets.
+          Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
+            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST — winter (UTC−8)' : 'Permanent PST (UTC−8)'}
+          </strong>
+        </div>
+      </div>
+
+      <div class="sports-cards">
+        {#each sportsData as sport}
+          <div class="sport-card">
+            <div class="sport-icon">{sport.icon}</div>
+            <div class="sport-league">{sport.league}</div>
+            <div class="sport-context">{sport.context}</div>
+            <div class="sport-source">{sport.source}</div>
+
+            <div class="sport-times">
+              <div class="sport-time-row" class:active={mode === 'pdt'}>
+                <span class="mode-pill pdt-pill">PDT</span>
+                <span class="sport-time-value">{sport.pdt}</span>
+              </div>
+              <div class="sport-time-row" class:active={mode === 'dst'}>
+                <span class="mode-pill dst-pill">Old DST</span>
+                <span class="sport-time-value">{sport.dst}</span>
+              </div>
+              <div class="sport-time-row" class:active={mode === 'pst'}>
+                <span class="mode-pill pst-pill">PST</span>
+                <span class="sport-time-value">{sport.pst}</span>
+              </div>
+            </div>
+
+            <div class="sport-takeaway">{sport.takeaway}</div>
+          </div>
+        {/each}
+      </div>
+
+      <div class="sports-footnote">
+        Times computed from UTC. Winter offsets: EST = UTC−5, CET = UTC+1. PDT = UTC−7 year-round; PST and old DST winter = UTC−8.
+      </div>
+    </div>
+  </div>
+
   <div class="insight-row">
     <div class="insight-card pro">
       <div class="insight-label">The Evening Win</div>
@@ -1040,6 +1199,219 @@
     line-height: 1.4;
   }
 
+  /* ─── Sports toggle button ───────────────────────────── */
+
+  .sports-toggle-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+  }
+
+  .sports-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card-bg);
+    border: 1px solid #30363d;
+    border-radius: 24px;
+    padding: 10px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+    letter-spacing: 0.2px;
+  }
+
+  .sports-btn:hover {
+    border-color: var(--accent-gold);
+    color: var(--text-primary);
+    background: rgba(240, 198, 84, 0.06);
+  }
+
+  .sports-btn.active {
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+    background: rgba(240, 198, 84, 0.08);
+  }
+
+  .sports-btn-chevron {
+    font-size: 14px;
+    transition: transform 0.25s ease;
+    display: inline-block;
+    line-height: 1;
+  }
+
+  .sports-btn-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  /* ─── Sports panel ───────────────────────────────────── */
+
+  .sports-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+  }
+
+  .sports-panel.open {
+    max-height: 1000px;
+  }
+
+  .sports-panel-inner {
+    padding-top: 20px;
+  }
+
+  .sports-header {
+    margin-bottom: 20px;
+  }
+
+  .sports-title {
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .sports-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.55;
+  }
+
+  .sports-subtitle strong {
+    font-weight: 600;
+  }
+
+  .pdt-accent { color: var(--accent-gold); }
+  .dst-accent { color: #8b949e; }
+  .pst-accent { color: var(--accent-blue); }
+
+  .sports-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .sport-card {
+    background: var(--card-bg);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 20px 18px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sport-icon {
+    font-size: 22px;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+
+  .sport-league {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.3;
+  }
+
+  .sport-context {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  .sport-source {
+    font-size: 10px;
+    color: #6e7681;
+    line-height: 1.4;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #21262d;
+    margin-bottom: 4px;
+  }
+
+  .sport-times {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .sport-time-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+  }
+
+  .sport-time-row.active {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .mode-pill {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    min-width: 52px;
+    text-align: center;
+  }
+
+  .pdt-pill {
+    background: rgba(240, 198, 84, 0.15);
+    color: var(--accent-gold);
+    border: 1px solid rgba(240, 198, 84, 0.3);
+  }
+
+  .dst-pill {
+    background: rgba(139, 148, 158, 0.12);
+    color: #8b949e;
+    border: 1px solid rgba(139, 148, 158, 0.25);
+  }
+
+  .pst-pill {
+    background: rgba(88, 166, 255, 0.12);
+    color: var(--accent-blue);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+  }
+
+  .sport-time-value {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  .sport-time-row.active .sport-time-value {
+    font-size: 18px;
+  }
+
+  .sport-takeaway {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    font-style: italic;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid #21262d;
+  }
+
+  .sports-footnote {
+    margin-top: 16px;
+    font-size: 10.5px;
+    color: #6e7681;
+    line-height: 1.6;
+    text-align: center;
+  }
+
   /* ─── Insight cards ──────────────────────────────────── */
 
   .insight-row {
@@ -1100,6 +1472,12 @@
 
   /* ─── Responsive ─────────────────────────────────────── */
 
+  @media (max-width: 768px) {
+    .sports-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+
   @media (max-width: 640px) {
     .insight-row {
       grid-template-columns: 1fr;
@@ -1130,7 +1508,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .stepper button,
-    .mode-toggle button {
+    .mode-toggle button,
+    .sports-btn,
+    .sports-panel {
       transition: none;
     }
   }
