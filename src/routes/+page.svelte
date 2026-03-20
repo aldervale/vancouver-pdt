@@ -729,31 +729,37 @@
   </header>
 
   <div class="controls-row">
-    <div class="selector-row">
-      <div class="selector">
-        <label for="wake-slider">Wake up</label>
-        <div class="stepper">
-          <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
-          <span class="stepper-value">{formatHour(wakeHour)}</span>
-          <button onclick={() => { if (wakeHour < 12) wakeHour++ }} aria-label="Later wake time">+</button>
+    <div class="selector-block">
+      <div class="selector-row">
+        <div class="selector">
+          <label for="wake-slider">Wake up</label>
+          <div class="stepper">
+            <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
+            <span class="stepper-value">{formatHour(wakeHour)}</span>
+            <button onclick={() => { if (wakeHour < 12) wakeHour++ }} aria-label="Later wake time">+</button>
+          </div>
+          <input id="wake-slider" type="range" min="4" max="12" bind:value={wakeHour} />
         </div>
-        <input id="wake-slider" type="range" min="4" max="12" bind:value={wakeHour} />
-      </div>
-      <div class="selector">
-        <label for="sleep-slider">Bedtime</label>
-        <div class="stepper">
-          <button onclick={() => { if (sleepHour > 18) sleepHour-- }} aria-label="Earlier bedtime">−</button>
-          <span class="stepper-value">{formatHour(sleepHour)}</span>
-          <button onclick={() => { if (sleepHour < 26) sleepHour++ }} aria-label="Later bedtime">+</button>
+        <div class="selector">
+          <label for="sleep-slider">Bedtime</label>
+          <div class="stepper">
+            <button onclick={() => { if (sleepHour > 18) sleepHour-- }} aria-label="Earlier bedtime">−</button>
+            <span class="stepper-value">{formatHour(sleepHour)}</span>
+            <button onclick={() => { if (sleepHour < 26) sleepHour++ }} aria-label="Later bedtime">+</button>
+          </div>
+          <input id="sleep-slider" type="range" min="18" max="26" bind:value={sleepHour} />
         </div>
-        <input id="sleep-slider" type="range" min="18" max="26" bind:value={sleepHour} />
       </div>
+      <p class="hint-caption">Adjust the sliders to match your schedule</p>
     </div>
 
-    <div class="mode-toggle" role="group" aria-label="Compare time systems">
-      <button class:active={mode === 'pdt'} class="mode-pdt" onclick={() => mode = 'pdt'}>Permanent PDT</button>
-      <button class:active={mode === 'dst'} class="mode-dst" onclick={() => mode = 'dst'}>Old DST</button>
-      <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
+    <div class="mode-toggle-block">
+      <div class="mode-toggle" role="group" aria-label="Compare time systems">
+        <button class:active={mode === 'pdt'} class="mode-pdt" onclick={() => mode = 'pdt'}>Permanent PDT</button>
+        <button class:active={mode === 'dst'} class="mode-dst" onclick={() => mode = 'dst'}>Old DST</button>
+        <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
+      </div>
+      <p class="hint-caption">Compare the three scenarios</p>
     </div>
   </div>
 
@@ -838,6 +844,7 @@
   </div>
 
   <!-- Context panel toggles — 2×2 grid -->
+  <p class="hint-caption hint-caption-grid">See how the change affects your daily life</p>
   <div class="context-toggle-grid">
     <button class="sports-btn" class:active={showSports} onclick={() => showSports = !showSports}>
       🏒 I like sports
@@ -1130,20 +1137,40 @@
 
   <div class="insight-row">
     <div class="insight-card pro">
-      <div class="insight-label">The Evening Win</div>
-      <div class="insight-text">
-        In winter, sunset shifts from <strong>~4:15 PM</strong> (old PST) to <strong>~5:15 PM</strong>
-        permanent PDT. That means an extra hour of usable daylight after work and school — huge for
-        outdoor activities, commuting safety, and mood.
-      </div>
+      {#if mode === 'pdt'}
+        <div class="insight-label">Evening win</div>
+        <div class="insight-text">
+          Under permanent PDT, sunset stays after 5 PM from <strong>late February through late October</strong> — giving you evening daylight for most of the year.
+        </div>
+      {:else if mode === 'dst'}
+        <div class="insight-label">Familiar rhythm</div>
+        <div class="insight-text">
+          The old system kept mornings brighter in winter and evenings longer in summer — a seasonal balance most Vancouverites grew up with.
+        </div>
+      {:else}
+        <div class="insight-label">Morning win</div>
+        <div class="insight-text">
+          Earlier sunrises year-round mean brighter mornings for kids heading to school and commuters leaving the house. December sunrise before <strong>8 AM</strong>.
+        </div>
+      {/if}
     </div>
     <div class="insight-card con">
-      <div class="insight-label">The Morning Trade-off</div>
-      <div class="insight-text">
-        Sunrise in late December won't arrive until <strong>~9:05 AM</strong> — over two hours after
-        a 7 AM wake-up. Kids heading to school and early commuters will start the day in
-        <strong>full darkness</strong> for about 3 months (Nov–Jan).
-      </div>
+      {#if mode === 'pdt'}
+        <div class="insight-label">Morning trade-off</div>
+        <div class="insight-text">
+          Winter sunrises shift an hour later. In December, the sun doesn't rise until after <strong>9 AM</strong> — a real consideration for early commuters and school-age kids.
+        </div>
+      {:else if mode === 'dst'}
+        <div class="insight-label">The hidden cost</div>
+        <div class="insight-text">
+          Clock changes aren't just annoying. Research links them to spikes in <strong>heart attacks, accidents, and disrupted sleep</strong> in the days after each transition.
+        </div>
+      {:else}
+        <div class="insight-label">Evening trade-off</div>
+        <div class="insight-text">
+          Sunset arrives before 5 PM for much of the year — meaning most after-work hours happen in the dark, especially November through February.
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -1204,11 +1231,39 @@
 
   .controls-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 24px;
     margin-bottom: 24px;
     flex-wrap: wrap;
+  }
+
+  .selector-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .mode-toggle-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .hint-caption {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    margin-bottom: 0;
+    opacity: 0.7;
+  }
+
+  .hint-caption-grid {
+    margin-top: 20px;
+    margin-bottom: 6px;
+    opacity: 0.7;
   }
 
   .selector-row {
