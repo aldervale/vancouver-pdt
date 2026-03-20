@@ -302,7 +302,7 @@
     ctx.scale(dpr, dpr);
 
     const padLeft = 80;
-    const padRight = 70;
+    const padRight = 82;
     const padTop = mode === 'dst' ? 36 : 10;
     const padBottom = 40;
 
@@ -535,11 +535,11 @@
 
     // Curve labels (right side, at Dec 31 = day 365)
     ctx.font = '600 10px "DM Sans"';
+    ctx.textAlign = 'right';
     ctx.fillStyle = '#e76f51';
-    ctx.textAlign = 'left';
-    ctx.fillText('SUNRISE', padLeft + chartW + 8, yPos(data[364].sunrise) + 3);
+    ctx.fillText('SUNRISE', W - 4, yPos(data[364].sunrise) + 3);
     ctx.fillStyle = '#f0c654';
-    ctx.fillText('SUNSET', padLeft + chartW + 8, yPos(data[364].sunset) + 3);
+    ctx.fillText('SUNSET', W - 4, yPos(data[364].sunset) + 3);
 
     // Y-axis labels
     ctx.font = '500 10px "DM Sans"';
@@ -588,8 +588,14 @@
     ctx.font = '700 9px "DM Sans"';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#e76f51';
-    ctx.fillText(decimalToTime(data[maxSunriseIdx].sunrise), xPosDoy(data[maxSunriseIdx].dayOfYear), yPos(data[maxSunriseIdx].sunrise) - 8);
-    ctx.fillText(decimalToTime(data[minSunriseIdx].sunrise), xPosDoy(data[minSunriseIdx].dayOfYear), yPos(data[minSunriseIdx].sunrise) - 8);
+    // For each extremum label, flip below the curve if drawing above would clip the top edge
+    const minLabelClearance = padTop + 12;
+    const maxSunriseY = yPos(data[maxSunriseIdx].sunrise);
+    ctx.fillText(decimalToTime(data[maxSunriseIdx].sunrise), xPosDoy(data[maxSunriseIdx].dayOfYear),
+      maxSunriseY - 8 < minLabelClearance ? maxSunriseY + 14 : maxSunriseY - 8);
+    const minSunriseY = yPos(data[minSunriseIdx].sunrise);
+    ctx.fillText(decimalToTime(data[minSunriseIdx].sunrise), xPosDoy(data[minSunriseIdx].dayOfYear),
+      minSunriseY - 8 < minLabelClearance ? minSunriseY + 14 : minSunriseY - 8);
     ctx.fillStyle = '#f0c654';
     ctx.fillText(decimalToTime(data[maxSunsetIdx].sunset), xPosDoy(data[maxSunsetIdx].dayOfYear), yPos(data[maxSunsetIdx].sunset) + 15);
     ctx.fillText(decimalToTime(data[minSunsetIdx].sunset), xPosDoy(data[minSunsetIdx].dayOfYear), yPos(data[minSunsetIdx].sunset) + 15);
@@ -696,16 +702,19 @@
     if (ctx) ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   }
 
+    let fontsReady = false;
   $effect(() => {
     wakeHour;
     sleepHour;
     mode;
-    draw();
-    setupOverlay();
+    if (fontsReady) {
+      draw();
+      setupOverlay();
+    }
   });
 
   onMount(() => {
-    draw();
+    document.fonts.ready.then(() => { fontsReady = true; draw(); });
     setupOverlay();
     window.addEventListener('resize', () => { draw(); setupOverlay(); });
 
@@ -803,7 +812,7 @@
       {#if mode === 'dst'}
         For comparison: how daylight looked under the old clock-change system.
       {:else}
-        The alternative B.C. rejected — permanent standard time (UTC−8).
+        The alternative B.C. was never offered — permanent standard time (UTC−8).
       {/if}
     </div>
   {/if}
@@ -878,6 +887,45 @@
     {/if}
   </div>
 
+  <div class="insight-row">
+    <div class="insight-card pro">
+      {#if mode === 'pdt'}
+        <div class="insight-label">Evening win</div>
+        <div class="insight-text">
+          Under permanent PDT, sunset stays after 5 PM from <strong>late February through late October</strong> — giving you evening daylight for most of the year.
+        </div>
+      {:else if mode === 'dst'}
+        <div class="insight-label">Familiar rhythm</div>
+        <div class="insight-text">
+          The old system kept mornings brighter in winter and evenings longer in summer — a seasonal balance most Vancouverites grew up with.
+        </div>
+      {:else}
+        <div class="insight-label">Morning win</div>
+        <div class="insight-text">
+          Earlier sunrises year-round mean brighter mornings for kids heading to school and commuters leaving the house. December sunrise before <strong>8 AM</strong>.
+        </div>
+      {/if}
+    </div>
+    <div class="insight-card con">
+      {#if mode === 'pdt'}
+        <div class="insight-label">Morning trade-off</div>
+        <div class="insight-text">
+          Winter sunrises shift an hour later. In December, the sun doesn't rise until after <strong>9 AM</strong> — a real consideration for early commuters and school-age kids.
+        </div>
+      {:else if mode === 'dst'}
+        <div class="insight-label">The hidden cost</div>
+        <div class="insight-text">
+          Clock changes aren't just annoying. Research links them to spikes in <strong>heart attacks, accidents, and disrupted sleep</strong> in the days after each transition.
+        </div>
+      {:else}
+        <div class="insight-label">Evening trade-off</div>
+        <div class="insight-text">
+          Sunset arrives before 5 PM for much of the year — meaning most after-work hours happen in the dark, especially November through February.
+        </div>
+      {/if}
+    </div>
+  </div>
+
   <!-- Context panel toggles — 2×2 grid -->
   <div class="context-toggle-grid">
     <button class="sports-btn" class:active={openPanel === 'sports'} onclick={() => openPanel = openPanel === 'sports' ? null : 'sports'}>
@@ -905,9 +953,11 @@
         <div class="sports-title">Game Times in Vancouver</div>
         <div class="sports-subtitle">
           How the time system affects when you watch sports — using real winter UTC offsets.
-          Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST — winter (UTC−8)' : 'Permanent PST (UTC−8)'}
-          </strong>
+        </div>
+        <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
+          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+          <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} onclick={() => mode = 'dst'}>Old DST</button>
+          <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
         </div>
       </div>
 
@@ -1098,9 +1148,11 @@
         <div class="sports-subtitle">
           NYSE opens at 9:30 AM ET (EST UTC−5 in winter, EDT UTC−4 in summer).
           What time does the bell ring on your clock in Vancouver?
-          Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST' : 'Permanent PST (UTC−8)'}
-          </strong>
+        </div>
+        <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
+          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+          <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} onclick={() => mode = 'dst'}>Old DST</button>
+          <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
         </div>
       </div>
 
@@ -1169,50 +1221,38 @@
     </div>
   </div>
 
-  <div class="insight-row">
-    <div class="insight-card pro">
-      {#if mode === 'pdt'}
-        <div class="insight-label">Evening win</div>
-        <div class="insight-text">
-          Under permanent PDT, sunset stays after 5 PM from <strong>late February through late October</strong> — giving you evening daylight for most of the year.
-        </div>
-      {:else if mode === 'dst'}
-        <div class="insight-label">Familiar rhythm</div>
-        <div class="insight-text">
-          The old system kept mornings brighter in winter and evenings longer in summer — a seasonal balance most Vancouverites grew up with.
-        </div>
-      {:else}
-        <div class="insight-label">Morning win</div>
-        <div class="insight-text">
-          Earlier sunrises year-round mean brighter mornings for kids heading to school and commuters leaving the house. December sunrise before <strong>8 AM</strong>.
-        </div>
-      {/if}
-    </div>
-    <div class="insight-card con">
-      {#if mode === 'pdt'}
-        <div class="insight-label">Morning trade-off</div>
-        <div class="insight-text">
-          Winter sunrises shift an hour later. In December, the sun doesn't rise until after <strong>9 AM</strong> — a real consideration for early commuters and school-age kids.
-        </div>
-      {:else if mode === 'dst'}
-        <div class="insight-label">The hidden cost</div>
-        <div class="insight-text">
-          Clock changes aren't just annoying. Research links them to spikes in <strong>heart attacks, accidents, and disrupted sleep</strong> in the days after each transition.
-        </div>
-      {:else}
-        <div class="insight-label">Evening trade-off</div>
-        <div class="insight-text">
-          Sunset arrives before 5 PM for much of the year — meaning most after-work hours happen in the dark, especially November through February.
-        </div>
-      {/if}
-    </div>
-  </div>
-
   <footer>
-    Sunrise/sunset computed with <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>
-    for Vancouver (49.28°N, 123.12°W), daily values for 2026.
-    Waking window is user-configurable above.
-    B.C. legislation passed March 2026. Permanent PDT takes effect after the final spring-forward on March 8, 2026.
+    <div class="references-section">
+      <div class="references-title">References &amp; Further Reading</div>
+      <div class="references-grid">
+        <div class="references-col">
+          <div class="references-col-label">B.C. Coverage</div>
+          <ul class="references-list">
+            <li><a href="https://www.cbc.ca/news/canada/british-columbia/b-c-adopting-year-round-daylight-time-9.7111657" target="_blank" rel="noopener">Reactions mixed as B.C. ends time changes, adopts year-round daylight time</a> — CBC News, Mar 2026</li>
+            <li><a href="https://www.cbc.ca/news/canada/british-columbia/bc-permanent-daylight-saving-time-pacific-time-zone-clocks-9.7116954" target="_blank" rel="noopener">March 8 is the last time most British Columbians will change their clocks</a> — CBC News, Mar 2026</li>
+            <li><a href="https://www.cbc.ca/news/canada/british-columbia/bc-clocks-changing-timeline-9.7112204" target="_blank" rel="noopener">A timeline of how B.C. got to Pacific time year-round</a> — CBC News, Mar 2026</li>
+            <li><a href="https://dailyhive.com/vancouver/bc-permanent-daylight-saving-time" target="_blank" rel="noopener">You are my sunshine: B.C. inches closer to permanent Daylight Saving Time</a> — Daily Hive, Mar 2022</li>
+            <li><a href="https://www.cbc.ca/news/canada/british-columbia/time-change-british-columbia-9.7112139" target="_blank" rel="noopener">People in northeast B.C. say rest of province should consider their experience</a> — CBC News, Mar 2026</li>
+          </ul>
+        </div>
+        <div class="references-col">
+          <div class="references-col-label">Science &amp; Debate</div>
+          <ul class="references-list">
+            <li><a href="https://www.cbc.ca/news/canada/bc-daylight-saving-health-concerns-9.7114947" target="_blank" rel="noopener">'Scientifically not a good idea,' says researcher — health concerns over permanent PDT</a> — CBC News, Mar 2026 <span class="ref-tag ref-con">con</span></li>
+            <li><a href="https://www.cbc.ca/news/canada/daylight-saving-time-canada-9.7113377" target="_blank" rel="noopener">B.C. is moving to permanent daylight time. Could your province be next?</a> — CBC News, Mar 2026</li>
+            <li><a href="https://www.cbc.ca/news/canada/london/should-ontario-follow-bc-daylight-savings-9.7113343" target="_blank" rel="noopener">B.C. is scrapping time changes. Should Ontario be next?</a> — CBC News, Mar 2026</li>
+            <li><a href="https://www.science.org/content/article/does-daylight-saving-time-affect-our-health" target="_blank" rel="noopener">Does daylight saving time affect our health?</a> — Science magazine <span class="ref-tag ref-con">con</span></li>
+            <li><a href="https://currentbiology.com/article/S0960-9822(19)31293-7/fulltext" target="_blank" rel="noopener">Humans in permanent summer time are late chronotypes</a> — Current Biology <span class="ref-tag ref-pro">pro</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-credit">
+      Sunrise/sunset computed with <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>
+      for Vancouver (49.28°N, 123.12°W), daily values for 2026.
+      Waking window is user-configurable above.
+      B.C. legislation passed March 2026. Permanent PDT takes effect after the final spring-forward on March 8, 2026.
+    </div>
   </footer>
 </div>
 
@@ -1265,7 +1305,7 @@
 
   .controls-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 24px;
     margin-bottom: 24px;
@@ -1390,7 +1430,7 @@
   .mode-note {
     font-size: 12.5px;
     color: var(--text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 20px;
     font-style: italic;
   }
 
@@ -1540,7 +1580,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 24px;
   }
 
   @media (max-width: 560px) {
@@ -1554,6 +1594,7 @@
   .sports-btn {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     background: var(--card-bg);
     border: 1px solid #30363d;
@@ -1565,6 +1606,7 @@
     cursor: pointer;
     transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
     letter-spacing: 0.2px;
+    width: 100%;
   }
 
   .sports-btn:hover {
@@ -1584,6 +1626,7 @@
     transition: transform 0.25s ease;
     display: inline-block;
     line-height: 1;
+    flex-shrink: 0;
   }
 
   .sports-btn-chevron.open {
@@ -1599,7 +1642,7 @@
   }
 
   .sports-panel.open {
-    max-height: 1000px;
+    max-height: 2400px;
   }
 
   .sports-panel-inner {
@@ -1622,10 +1665,55 @@
     font-size: 12px;
     color: var(--text-muted);
     line-height: 1.55;
+    margin-bottom: 12px;
   }
 
   .sports-subtitle strong {
     font-weight: 600;
+  }
+
+  /* ─── Panel-level mode toggle ────────────────────────── */
+
+  .panel-mode-toggle {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .panel-mode-btn {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid #30363d;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .panel-mode-btn:hover {
+    border-color: #58a6ff55;
+    color: var(--text-primary);
+  }
+
+  .panel-mode-btn.active.pdt {
+    border-color: rgba(240, 198, 84, 0.5);
+    color: var(--accent-gold);
+    background: rgba(240, 198, 84, 0.08);
+  }
+
+  .panel-mode-btn.active.dst {
+    border-color: rgba(139, 148, 158, 0.4);
+    color: #8b949e;
+    background: rgba(139, 148, 158, 0.08);
+  }
+
+  .panel-mode-btn.active.pst {
+    border-color: rgba(88, 166, 255, 0.4);
+    color: var(--accent-blue);
+    background: rgba(88, 166, 255, 0.08);
   }
 
   .pdt-accent { color: var(--accent-gold); }
@@ -1966,14 +2054,14 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
-    margin-top: 16px;
+    margin-top: 24px;
   }
 
   .insight-card {
     background: var(--card-bg);
     border: 1px solid #30363d;
     border-radius: 12px;
-    padding: 22px 22px 20px;
+    padding: 22px;
   }
 
   .insight-label {
@@ -2016,6 +2104,87 @@
 
   footer a:hover {
     text-decoration: underline;
+  }
+
+  .references-section {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #21262d;
+  }
+
+  .references-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: #8b949e;
+    margin-bottom: 16px;
+  }
+
+  .references-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 640px) {
+    .references-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .references-col-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #6e7681;
+    margin-bottom: 10px;
+  }
+
+  .references-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .references-list li {
+    font-size: 12px;
+    color: #6e7681;
+    line-height: 1.55;
+  }
+
+  .ref-tag {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 8px;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
+  .ref-pro {
+    background: rgba(240, 198, 84, 0.12);
+    color: var(--accent-gold);
+    border: 1px solid rgba(240, 198, 84, 0.3);
+  }
+
+  .ref-con {
+    background: rgba(231, 111, 81, 0.12);
+    color: var(--accent-orange);
+    border: 1px solid rgba(231, 111, 81, 0.3);
+  }
+
+  .footer-credit {
+    font-size: 11px;
+    color: #6e7681;
+    line-height: 1.7;
   }
 
   /* ─── Responsive ─────────────────────────────────────── */
