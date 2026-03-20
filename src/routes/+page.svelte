@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import SunCalc from 'suncalc';
+  import { driver } from 'driver.js';
+  import 'driver.js/dist/driver.css';
 
   let canvas: HTMLCanvasElement;
   let overlayCanvas: HTMLCanvasElement;
@@ -74,10 +76,7 @@
   let wakeHour = $state(7);
   let sleepHour = $state(23);
   let mode: 'pdt' | 'dst' | 'pst' = $state('pdt');
-  let showSports = $state(false);
-  let showSchool = $state(false);
-  let show95 = $state(false);
-  let showNYSE = $state(false);
+  let openPanel: string | null = $state(null);
 
   // ── School start times stats (static, computed once) ──────────────────────
   // Count days where sunrise > 8.5 (8:30 AM) — kid leaves for school in darkness
@@ -709,6 +708,48 @@
     draw();
     setupOverlay();
     window.addEventListener('resize', () => { draw(); setupOverlay(); });
+
+    // Guided onboarding tour (first visit only)
+    if (!localStorage.getItem('vdt_tour_done')) {
+      setTimeout(() => {
+        const driverObj = driver({
+          showProgress: true,
+          onDestroyed: () => localStorage.setItem('vdt_tour_done', '1'),
+          steps: [
+            {
+              element: '.selector-row',
+              popover: {
+                title: 'Your schedule',
+                description: 'Set your typical wake-up and bedtime to see how daylight fits your day.',
+              }
+            },
+            {
+              element: '.mode-toggle',
+              popover: {
+                title: 'Three scenarios',
+                description: 'Compare permanent PDT (what\'s coming), the old clock-change system, and permanent standard time.',
+              }
+            },
+            {
+              element: '.chart-wrapper',
+              popover: {
+                title: 'Your daylight',
+                description: 'The gold band shows sunlight during your waking hours. Hover over any date to see exact sunrise and sunset times.',
+              }
+            },
+            {
+              element: '.context-toggle-grid',
+              popover: {
+                title: 'Your daily life',
+                description: 'See how the time change affects sports, school runs, work commutes, and the stock market.',
+              }
+            },
+          ],
+        });
+        driverObj.drive();
+      }, 300);
+    }
+
     return () => window.removeEventListener('resize', () => { draw(); setupOverlay(); });
   });
 </script>
@@ -729,37 +770,31 @@
   </header>
 
   <div class="controls-row">
-    <div class="selector-block">
-      <div class="selector-row">
-        <div class="selector">
-          <label for="wake-slider">Wake up</label>
-          <div class="stepper">
-            <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
-            <span class="stepper-value">{formatHour(wakeHour)}</span>
-            <button onclick={() => { if (wakeHour < 12) wakeHour++ }} aria-label="Later wake time">+</button>
-          </div>
-          <input id="wake-slider" type="range" min="4" max="12" bind:value={wakeHour} />
+    <div class="selector-row">
+      <div class="selector">
+        <label for="wake-slider">Wake up</label>
+        <div class="stepper">
+          <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
+          <span class="stepper-value">{formatHour(wakeHour)}</span>
+          <button onclick={() => { if (wakeHour < 12) wakeHour++ }} aria-label="Later wake time">+</button>
         </div>
-        <div class="selector">
-          <label for="sleep-slider">Bedtime</label>
-          <div class="stepper">
-            <button onclick={() => { if (sleepHour > 18) sleepHour-- }} aria-label="Earlier bedtime">−</button>
-            <span class="stepper-value">{formatHour(sleepHour)}</span>
-            <button onclick={() => { if (sleepHour < 26) sleepHour++ }} aria-label="Later bedtime">+</button>
-          </div>
-          <input id="sleep-slider" type="range" min="18" max="26" bind:value={sleepHour} />
-        </div>
+        <input id="wake-slider" type="range" min="4" max="12" bind:value={wakeHour} />
       </div>
-      <p class="hint-caption">Adjust the sliders to match your schedule</p>
+      <div class="selector">
+        <label for="sleep-slider">Bedtime</label>
+        <div class="stepper">
+          <button onclick={() => { if (sleepHour > 18) sleepHour-- }} aria-label="Earlier bedtime">−</button>
+          <span class="stepper-value">{formatHour(sleepHour)}</span>
+          <button onclick={() => { if (sleepHour < 26) sleepHour++ }} aria-label="Later bedtime">+</button>
+        </div>
+        <input id="sleep-slider" type="range" min="18" max="26" bind:value={sleepHour} />
+      </div>
     </div>
 
-    <div class="mode-toggle-block">
-      <div class="mode-toggle" role="group" aria-label="Compare time systems">
-        <button class:active={mode === 'pdt'} class="mode-pdt" onclick={() => mode = 'pdt'}>Permanent PDT</button>
-        <button class:active={mode === 'dst'} class="mode-dst" onclick={() => mode = 'dst'}>Old DST</button>
-        <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
-      </div>
-      <p class="hint-caption">Compare the three scenarios</p>
+    <div class="mode-toggle" role="group" aria-label="Compare time systems">
+      <button class:active={mode === 'pdt'} class="mode-pdt" onclick={() => mode = 'pdt'}>Permanent PDT</button>
+      <button class:active={mode === 'dst'} class="mode-dst" onclick={() => mode = 'dst'}>Old DST</button>
+      <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
     </div>
   </div>
 
@@ -844,28 +879,27 @@
   </div>
 
   <!-- Context panel toggles — 2×2 grid -->
-  <p class="hint-caption hint-caption-grid">See how the change affects your daily life</p>
   <div class="context-toggle-grid">
-    <button class="sports-btn" class:active={showSports} onclick={() => showSports = !showSports}>
+    <button class="sports-btn" class:active={openPanel === 'sports'} onclick={() => openPanel = openPanel === 'sports' ? null : 'sports'}>
       🏒 I like sports
-      <span class="sports-btn-chevron" class:open={showSports}>▾</span>
+      <span class="sports-btn-chevron" class:open={openPanel === 'sports'}>▾</span>
     </button>
-    <button class="sports-btn" class:active={showSchool} onclick={() => showSchool = !showSchool}>
+    <button class="sports-btn" class:active={openPanel === 'school'} onclick={() => openPanel = openPanel === 'school' ? null : 'school'}>
       👧 I have a kid
-      <span class="sports-btn-chevron" class:open={showSchool}>▾</span>
+      <span class="sports-btn-chevron" class:open={openPanel === 'school'}>▾</span>
     </button>
-    <button class="sports-btn" class:active={show95} onclick={() => show95 = !show95}>
+    <button class="sports-btn" class:active={openPanel === 'work'} onclick={() => openPanel = openPanel === 'work' ? null : 'work'}>
       💼 I work a 9-to-5
-      <span class="sports-btn-chevron" class:open={show95}>▾</span>
+      <span class="sports-btn-chevron" class:open={openPanel === 'work'}>▾</span>
     </button>
-    <button class="sports-btn" class:active={showNYSE} onclick={() => showNYSE = !showNYSE}>
+    <button class="sports-btn" class:active={openPanel === 'stocks'} onclick={() => openPanel = openPanel === 'stocks' ? null : 'stocks'}>
       📈 I trade stocks
-      <span class="sports-btn-chevron" class:open={showNYSE}>▾</span>
+      <span class="sports-btn-chevron" class:open={openPanel === 'stocks'}>▾</span>
     </button>
   </div>
 
   <!-- Sports panel -->
-  <div class="sports-panel" class:open={showSports} aria-hidden={!showSports}>
+  <div class="sports-panel" class:open={openPanel === 'sports'} aria-hidden={openPanel !== 'sports'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
         <div class="sports-title">Game Times in Vancouver</div>
@@ -912,7 +946,7 @@
   </div>
 
   <!-- School Start Times panel -->
-  <div class="sports-panel" class:open={showSchool} aria-hidden={!showSchool}>
+  <div class="sports-panel" class:open={openPanel === 'school'} aria-hidden={openPanel !== 'school'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
         <div class="sports-title">School Start Times & Dark Mornings</div>
@@ -926,7 +960,7 @@
       </div>
 
       <div class="context-cards">
-        <div class="context-card" class:context-card-active={mode === 'pdt'}>
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} onclick={() => mode = 'pdt'} title="Switch to PDT">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PDT</span>
             <span class="context-mode-label">Permanent PDT (UTC−7)</span>
@@ -940,7 +974,7 @@
           <div class="context-insight">Sun rises after 8:30 AM for ~{Math.round(schoolDarkDays.pdt / 30.4)} months. The 1-hour shift from PST means more dark mornings for kids.</div>
         </div>
 
-        <div class="context-card" class:context-card-active={mode === 'dst'}>
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} onclick={() => mode = 'dst'} title="Switch to Old DST">
           <div class="context-card-header">
             <span class="mode-pill dst-pill">DST</span>
             <span class="context-mode-label">Old DST (UTC−8 winter)</span>
@@ -954,7 +988,7 @@
           <div class="context-insight">The clock change gave earlier winter sunrises — kids benefited from darker evenings but brighter mornings.</div>
         </div>
 
-        <div class="context-card" class:context-card-active={mode === 'pst'}>
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} onclick={() => mode = 'pst'} title="Switch to PST">
           <div class="context-card-header">
             <span class="mode-pill pst-pill">PST</span>
             <span class="context-mode-label">Permanent PST (UTC−8)</span>
@@ -976,7 +1010,7 @@
   </div>
 
   <!-- 9-5 Work panel -->
-  <div class="sports-panel" class:open={show95} aria-hidden={!show95}>
+  <div class="sports-panel" class:open={openPanel === 'work'} aria-hidden={openPanel !== 'work'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
         <div class="sports-title">Leaving Work in Daylight</div>
@@ -989,7 +1023,7 @@
       </div>
 
       <div class="context-cards">
-        <div class="context-card" class:context-card-active={mode === 'pdt'}>
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} onclick={() => mode = 'pdt'} title="Switch to PDT">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PDT</span>
             <span class="context-mode-label">Permanent PDT (UTC−7)</span>
@@ -1009,7 +1043,7 @@
           <div class="context-insight">Permanent PDT's main benefit — evening daylight is shifted 1 hour later all year.</div>
         </div>
 
-        <div class="context-card" class:context-card-active={mode === 'dst'}>
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} onclick={() => mode = 'dst'} title="Switch to Old DST">
           <div class="context-card-header">
             <span class="mode-pill dst-pill">DST</span>
             <span class="context-mode-label">Old DST (UTC−8 winter)</span>
@@ -1029,7 +1063,7 @@
           <div class="context-insight">Old DST gave you evening daylight in summer but short winter days at 5 PM.</div>
         </div>
 
-        <div class="context-card" class:context-card-active={mode === 'pst'}>
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} onclick={() => mode = 'pst'} title="Switch to PST">
           <div class="context-card-header">
             <span class="mode-pill pst-pill">PST</span>
             <span class="context-mode-label">Permanent PST (UTC−8)</span>
@@ -1057,7 +1091,7 @@
   </div>
 
   <!-- NYSE Opens panel -->
-  <div class="sports-panel" class:open={showNYSE} aria-hidden={!showNYSE}>
+  <div class="sports-panel" class:open={openPanel === 'stocks'} aria-hidden={openPanel !== 'stocks'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
         <div class="sports-title">NYSE Open — Vancouver Clock Time</div>
@@ -1236,34 +1270,6 @@
     gap: 24px;
     margin-bottom: 24px;
     flex-wrap: wrap;
-  }
-
-  .selector-block {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .mode-toggle-block {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-
-  .hint-caption {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 6px;
-    margin-bottom: 0;
-    opacity: 0.7;
-  }
-
-  .hint-caption-grid {
-    margin-top: 20px;
-    margin-bottom: 6px;
-    opacity: 0.7;
   }
 
   .selector-row {
@@ -2055,5 +2061,45 @@
     .sports-panel {
       transition: none;
     }
+  }
+
+  /* ─── Click-to-switch mode affordance ────────────────── */
+
+  .mode-switchable {
+    cursor: pointer;
+    transition: filter 0.15s ease, border-color 0.15s ease;
+  }
+
+  .mode-switchable:hover {
+    filter: brightness(1.15);
+  }
+
+  /* ─── Driver.js tour overrides ───────────────────────── */
+
+  :global(.driver-popover) {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    color: #e6edf3 !important;
+  }
+
+  :global(.driver-popover-title) {
+    color: #f5f0e8 !important;
+    font-family: 'Playfair Display', serif !important;
+  }
+
+  :global(.driver-popover-description) {
+    color: #8b949e !important;
+  }
+
+  :global(.driver-popover-next-btn) {
+    background: #f0c654 !important;
+    color: #0d1117 !important;
+    border: none !important;
+  }
+
+  :global(.driver-popover-prev-btn),
+  :global(.driver-popover-close-btn) {
+    color: #8b949e !important;
+    border-color: #30363d !important;
   }
 </style>
