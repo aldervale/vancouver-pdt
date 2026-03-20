@@ -71,7 +71,7 @@
   // PST: permanent UTC-8
   const pstData = generateDailyData(() => -8);
 
-  let wakeHour = $state(4);
+  let wakeHour = $state(7);
   let sleepHour = $state(23);
   let mode: 'pdt' | 'dst' | 'pst' = $state('pdt');
   let showSports = $state(false);
@@ -840,19 +840,19 @@
   <!-- Context panel toggles — 2×2 grid -->
   <div class="context-toggle-grid">
     <button class="sports-btn" class:active={showSports} onclick={() => showSports = !showSports}>
-      🏒 I Like Sports
+      🏒 I like sports
       <span class="sports-btn-chevron" class:open={showSports}>▾</span>
     </button>
     <button class="sports-btn" class:active={showSchool} onclick={() => showSchool = !showSchool}>
-      🏫 School Start Times
+      👧 I have a kid
       <span class="sports-btn-chevron" class:open={showSchool}>▾</span>
     </button>
     <button class="sports-btn" class:active={show95} onclick={() => show95 = !show95}>
-      💼 I Work a 9-5
+      💼 I work a 9-to-5
       <span class="sports-btn-chevron" class:open={show95}>▾</span>
     </button>
     <button class="sports-btn" class:active={showNYSE} onclick={() => showNYSE = !showNYSE}>
-      📈 NYSE Opens
+      📈 I trade stocks
       <span class="sports-btn-chevron" class:open={showNYSE}>▾</span>
     </button>
   </div>
