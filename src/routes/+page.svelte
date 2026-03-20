@@ -75,6 +75,44 @@
   let sleepHour = $state(23);
   let mode: 'pdt' | 'dst' | 'pst' = $state('pdt');
   let showSports = $state(false);
+  let showSchool = $state(false);
+  let show95 = $state(false);
+  let showNYSE = $state(false);
+
+  // ── School start times stats (static, computed once) ──────────────────────
+  // Count days where sunrise > 8.5 (8:30 AM) — kid leaves for school in darkness
+  const schoolDarkDays = {
+    pdt: pdtData.filter(d => d.sunrise > 8.5).length,
+    dst: dstData.filter(d => d.sunrise > 8.5).length,
+    pst: pstData.filter(d => d.sunrise > 8.5).length,
+  };
+
+  const worstSunrisePDT = pdtData.reduce((max, d) => d.sunrise > max.sunrise ? d : max, pdtData[0]);
+  const worstSunriseDST = dstData.reduce((max, d) => d.sunrise > max.sunrise ? d : max, dstData[0]);
+  const worstSunrisePST = pstData.reduce((max, d) => d.sunrise > max.sunrise ? d : max, pstData[0]);
+
+  // ── Work 9-5 stats (static, computed once) ────────────────────────────────
+  // Count days where sunset > 17.0 (5:00 PM) — worker leaves in daylight
+  const workDaylightDays = {
+    pdt: pdtData.filter(d => d.sunset > 17.0).length,
+    dst: dstData.filter(d => d.sunset > 17.0).length,
+    pst: pstData.filter(d => d.sunset > 17.0).length,
+  };
+
+  const workDaylightRange = {
+    pdt: {
+      first: pdtData.find(d => d.sunset > 17.0),
+      last: [...pdtData].reverse().find(d => d.sunset > 17.0),
+    },
+    dst: {
+      first: dstData.find(d => d.sunset > 17.0),
+      last: [...dstData].reverse().find(d => d.sunset > 17.0),
+    },
+    pst: {
+      first: pstData.find(d => d.sunset > 17.0),
+      last: [...pstData].reverse().find(d => d.sunset > 17.0),
+    },
+  };
 
   const activeData = $derived(
     mode === 'pdt' ? pdtData : mode === 'dst' ? dstData : pstData
@@ -799,11 +837,23 @@
     {/if}
   </div>
 
-  <!-- Sports panel toggle -->
-  <div class="sports-toggle-row">
+  <!-- Context panel toggles — 2×2 grid -->
+  <div class="context-toggle-grid">
     <button class="sports-btn" class:active={showSports} onclick={() => showSports = !showSports}>
       🏒 I Like Sports
       <span class="sports-btn-chevron" class:open={showSports}>▾</span>
+    </button>
+    <button class="sports-btn" class:active={showSchool} onclick={() => showSchool = !showSchool}>
+      🏫 School Start Times
+      <span class="sports-btn-chevron" class:open={showSchool}>▾</span>
+    </button>
+    <button class="sports-btn" class:active={show95} onclick={() => show95 = !show95}>
+      💼 I Work a 9-5
+      <span class="sports-btn-chevron" class:open={show95}>▾</span>
+    </button>
+    <button class="sports-btn" class:active={showNYSE} onclick={() => showNYSE = !showNYSE}>
+      📈 NYSE Opens
+      <span class="sports-btn-chevron" class:open={showNYSE}>▾</span>
     </button>
   </div>
 
@@ -850,6 +900,230 @@
 
       <div class="sports-footnote">
         Times computed from UTC. Winter offsets: EST = UTC−5, CET = UTC+1. PDT = UTC−7 year-round; PST and old DST winter = UTC−8.
+      </div>
+    </div>
+  </div>
+
+  <!-- School Start Times panel -->
+  <div class="sports-panel" class:open={showSchool} aria-hidden={!showSchool}>
+    <div class="sports-panel-inner">
+      <div class="sports-header">
+        <div class="sports-title">School Start Times & Dark Mornings</div>
+        <div class="sports-subtitle">
+          Vancouver elementary schools start at 8:45 AM; middle/secondary at 8:30 AM.
+          Days where sunrise is after 8:30 AM = kids leave for school before sunrise.
+          Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
+            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST' : 'Permanent PST (UTC−8)'}
+          </strong>
+        </div>
+      </div>
+
+      <div class="context-cards">
+        <div class="context-card" class:context-card-active={mode === 'pdt'}>
+          <div class="context-card-header">
+            <span class="mode-pill pdt-pill">PDT</span>
+            <span class="context-mode-label">Permanent PDT (UTC−7)</span>
+          </div>
+          <div class="context-big-number orange">{schoolDarkDays.pdt}</div>
+          <div class="context-big-label">days of dark morning commutes</div>
+          <div class="context-detail">
+            Worst day: <strong>{MONTH_NAMES[worstSunrisePDT.date.getMonth()]} {worstSunrisePDT.date.getDate()}</strong>
+            — sunrise at <strong class="orange">{fmtTime(worstSunrisePDT.sunrise)}</strong>
+          </div>
+          <div class="context-insight">Sun rises after 8:30 AM for ~{Math.round(schoolDarkDays.pdt / 30.4)} months. The 1-hour shift from PST means more dark mornings for kids.</div>
+        </div>
+
+        <div class="context-card" class:context-card-active={mode === 'dst'}>
+          <div class="context-card-header">
+            <span class="mode-pill dst-pill">DST</span>
+            <span class="context-mode-label">Old DST (UTC−8 winter)</span>
+          </div>
+          <div class="context-big-number dst-grey">{schoolDarkDays.dst}</div>
+          <div class="context-big-label">days of dark morning commutes</div>
+          <div class="context-detail">
+            Worst day: <strong>{MONTH_NAMES[worstSunriseDST.date.getMonth()]} {worstSunriseDST.date.getDate()}</strong>
+            — sunrise at <strong class="dst-grey">{fmtTime(worstSunriseDST.sunrise)}</strong>
+          </div>
+          <div class="context-insight">The clock change gave earlier winter sunrises — kids benefited from darker evenings but brighter mornings.</div>
+        </div>
+
+        <div class="context-card" class:context-card-active={mode === 'pst'}>
+          <div class="context-card-header">
+            <span class="mode-pill pst-pill">PST</span>
+            <span class="context-mode-label">Permanent PST (UTC−8)</span>
+          </div>
+          <div class="context-big-number blue">{schoolDarkDays.pst}</div>
+          <div class="context-big-label">days of dark morning commutes</div>
+          <div class="context-detail">
+            Worst day: <strong>{MONTH_NAMES[worstSunrisePST.date.getMonth()]} {worstSunrisePST.date.getDate()}</strong>
+            — sunrise at <strong class="blue">{fmtTime(worstSunrisePST.sunrise)}</strong>
+          </div>
+          <div class="context-insight">PST wins for school mornings — earlier sunrises mean fewer dark commutes for kids all year.</div>
+        </div>
+      </div>
+
+      <div class="sports-footnote">
+        Dark morning = sunrise after 8:30 AM. Elementary schools start 8:45 AM, middle/secondary 8:30 AM. PST has the fewest dark morning commutes; permanent PDT has the most.
+      </div>
+    </div>
+  </div>
+
+  <!-- 9-5 Work panel -->
+  <div class="sports-panel" class:open={show95} aria-hidden={!show95}>
+    <div class="sports-panel-inner">
+      <div class="sports-header">
+        <div class="sports-title">Leaving Work in Daylight</div>
+        <div class="sports-subtitle">
+          Days per year where sunset is after 5:00 PM — you walk out of the office into daylight.
+          Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
+            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST' : 'Permanent PST (UTC−8)'}
+          </strong>
+        </div>
+      </div>
+
+      <div class="context-cards">
+        <div class="context-card" class:context-card-active={mode === 'pdt'}>
+          <div class="context-card-header">
+            <span class="mode-pill pdt-pill">PDT</span>
+            <span class="context-mode-label">Permanent PDT (UTC−7)</span>
+          </div>
+          <div class="context-big-number gold">{workDaylightDays.pdt}</div>
+          <div class="context-big-label">days/year you leave work in daylight</div>
+          <div class="context-detail">
+            {365 - workDaylightDays.pdt} days commuting home in the dark
+          </div>
+          {#if workDaylightRange.pdt.first && workDaylightRange.pdt.last}
+          <div class="context-detail">
+            Daylight-after-5 runs
+            <strong>{MONTH_NAMES[workDaylightRange.pdt.first.date.getMonth()]} {workDaylightRange.pdt.first.date.getDate()}</strong>
+            → <strong>{MONTH_NAMES[workDaylightRange.pdt.last.date.getMonth()]} {workDaylightRange.pdt.last.date.getDate()}</strong>
+          </div>
+          {/if}
+          <div class="context-insight">Permanent PDT's main benefit — evening daylight is shifted 1 hour later all year.</div>
+        </div>
+
+        <div class="context-card" class:context-card-active={mode === 'dst'}>
+          <div class="context-card-header">
+            <span class="mode-pill dst-pill">DST</span>
+            <span class="context-mode-label">Old DST (UTC−8 winter)</span>
+          </div>
+          <div class="context-big-number dst-grey">{workDaylightDays.dst}</div>
+          <div class="context-big-label">days/year you leave work in daylight</div>
+          <div class="context-detail">
+            {365 - workDaylightDays.dst} days commuting home in the dark
+          </div>
+          {#if workDaylightRange.dst.first && workDaylightRange.dst.last}
+          <div class="context-detail">
+            Daylight-after-5 runs
+            <strong>{MONTH_NAMES[workDaylightRange.dst.first.date.getMonth()]} {workDaylightRange.dst.first.date.getDate()}</strong>
+            → <strong>{MONTH_NAMES[workDaylightRange.dst.last.date.getMonth()]} {workDaylightRange.dst.last.date.getDate()}</strong>
+          </div>
+          {/if}
+          <div class="context-insight">Old DST gave you evening daylight in summer but short winter days at 5 PM.</div>
+        </div>
+
+        <div class="context-card" class:context-card-active={mode === 'pst'}>
+          <div class="context-card-header">
+            <span class="mode-pill pst-pill">PST</span>
+            <span class="context-mode-label">Permanent PST (UTC−8)</span>
+          </div>
+          <div class="context-big-number blue">{workDaylightDays.pst}</div>
+          <div class="context-big-label">days/year you leave work in daylight</div>
+          <div class="context-detail">
+            {365 - workDaylightDays.pst} days commuting home in the dark
+          </div>
+          {#if workDaylightRange.pst.first && workDaylightRange.pst.last}
+          <div class="context-detail">
+            Daylight-after-5 runs
+            <strong>{MONTH_NAMES[workDaylightRange.pst.first.date.getMonth()]} {workDaylightRange.pst.first.date.getDate()}</strong>
+            → <strong>{MONTH_NAMES[workDaylightRange.pst.last.date.getMonth()]} {workDaylightRange.pst.last.date.getDate()}</strong>
+          </div>
+          {/if}
+          <div class="context-insight">PST gives the fewest evening daylight days — sunset arrives earlier every day of the year.</div>
+        </div>
+      </div>
+
+      <div class="sports-footnote">
+        Daylight after 5 PM = sunset after 17:00. Permanent PDT has significantly more evenings with sunlight after the workday ends.
+      </div>
+    </div>
+  </div>
+
+  <!-- NYSE Opens panel -->
+  <div class="sports-panel" class:open={showNYSE} aria-hidden={!showNYSE}>
+    <div class="sports-panel-inner">
+      <div class="sports-header">
+        <div class="sports-title">NYSE Open — Vancouver Clock Time</div>
+        <div class="sports-subtitle">
+          NYSE opens at 9:30 AM ET (EST UTC−5 in winter, EDT UTC−4 in summer).
+          What time does the bell ring on your clock in Vancouver?
+          Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
+            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST' : 'Permanent PST (UTC−8)'}
+          </strong>
+        </div>
+      </div>
+
+      <div class="nyse-table">
+        <div class="nyse-header-row">
+          <div class="nyse-season-label">Season</div>
+          <div class="nyse-col">
+            <span class="mode-pill pdt-pill" class:nyse-active={mode === 'pdt'}>PDT</span>
+          </div>
+          <div class="nyse-col">
+            <span class="mode-pill dst-pill" class:nyse-active={mode === 'dst'}>Old DST</span>
+          </div>
+          <div class="nyse-col">
+            <span class="mode-pill pst-pill" class:nyse-active={mode === 'pst'}>PST</span>
+          </div>
+        </div>
+
+        <div class="nyse-row" >
+          <div class="nyse-season-label">
+            <div class="nyse-season-name">🥶 Winter</div>
+            <div class="nyse-season-sub">Nov – Mar · EST (UTC−5)</div>
+            <div class="nyse-season-sub">14:30 UTC</div>
+          </div>
+          <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'pdt'}>
+            <span class="nyse-time-value">7:30 AM</span>
+            <span class="nyse-time-note">1hr later than today</span>
+          </div>
+          <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'dst'}>
+            <span class="nyse-time-value">6:30 AM</span>
+            <span class="nyse-time-note">same as now</span>
+          </div>
+          <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'pst'}>
+            <span class="nyse-time-value">6:30 AM</span>
+            <span class="nyse-time-note">same as now</span>
+          </div>
+        </div>
+
+        <div class="nyse-row">
+          <div class="nyse-season-label">
+            <div class="nyse-season-name">☀️ Summer</div>
+            <div class="nyse-season-sub">Mar – Nov · EDT (UTC−4)</div>
+            <div class="nyse-season-sub">13:30 UTC</div>
+          </div>
+          <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'pdt'}>
+            <span class="nyse-time-value">6:30 AM</span>
+            <span class="nyse-time-note">same as today</span>
+          </div>
+          <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'dst'}>
+            <span class="nyse-time-value">6:30 AM</span>
+            <span class="nyse-time-note">same as PDT summer</span>
+          </div>
+          <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'pst'}>
+            <span class="nyse-time-value">5:30 AM</span>
+            <span class="nyse-time-note">1hr earlier — pre-dawn</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="nyse-insight">
+        Under permanent PDT, NYSE opens at <strong>7:30 AM in winter</strong> — a full hour later than the current 6:30 AM under old DST/PST. Better for sleep, trickier if you need to catch the open. Under permanent PST, summer trading starts at a brutal <strong>5:30 AM</strong>.
+      </div>
+
+      <div class="sports-footnote">
+        NYSE open = 9:30 AM ET. EST (UTC−5) Nov–Mar; EDT (UTC−4) Mar–Nov. PDT = UTC−7 year-round; PST = UTC−8 year-round; Old DST = UTC−8 winter / UTC−7 summer.
       </div>
     </div>
   </div>
@@ -1199,13 +1473,22 @@
     line-height: 1.4;
   }
 
-  /* ─── Sports toggle button ───────────────────────────── */
+  /* ─── Context toggle grid ────────────────────────────── */
 
-  .sports-toggle-row {
-    display: flex;
-    justify-content: center;
+  .context-toggle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
     margin-top: 20px;
   }
+
+  @media (max-width: 560px) {
+    .context-toggle-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ─── Sports toggle button ───────────────────────────── */
 
   .sports-btn {
     display: flex;
@@ -1410,6 +1693,210 @@
     color: #6e7681;
     line-height: 1.6;
     text-align: center;
+  }
+
+  /* ─── Context panel cards (school, 9-5) ─────────────── */
+
+  .context-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .context-card {
+    background: var(--card-bg);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 20px 18px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.2s ease;
+  }
+
+  .context-card-active {
+    border-color: rgba(240, 198, 84, 0.35);
+    background: rgba(240, 198, 84, 0.03);
+  }
+
+  .context-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .context-mode-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .context-big-number {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: clamp(36px, 5vw, 52px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .context-big-number.gold { color: var(--accent-gold); }
+  .context-big-number.orange { color: var(--accent-orange); }
+  .context-big-number.blue { color: var(--accent-blue); }
+  .context-big-number.dst-grey { color: #8b949e; }
+
+  .context-big-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: -4px;
+  }
+
+  .context-detail {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .context-detail strong { color: var(--text-primary); font-weight: 600; }
+  .context-detail strong.orange { color: var(--accent-orange); }
+  .context-detail strong.blue { color: var(--accent-blue); }
+  .context-detail strong.dst-grey { color: #8b949e; }
+
+  .context-insight {
+    font-size: 11.5px;
+    color: #6e7681;
+    line-height: 1.55;
+    font-style: italic;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid #21262d;
+  }
+
+  /* ─── NYSE table ─────────────────────────────────────── */
+
+  .nyse-table {
+    background: var(--card-bg);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .nyse-header-row,
+  .nyse-row {
+    display: grid;
+    grid-template-columns: 160px 1fr 1fr 1fr;
+    gap: 0;
+  }
+
+  .nyse-header-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid #21262d;
+    background: rgba(255,255,255,0.02);
+    align-items: center;
+  }
+
+  .nyse-row {
+    padding: 16px 16px;
+    border-bottom: 1px solid #21262d;
+    align-items: center;
+  }
+
+  .nyse-row:last-child {
+    border-bottom: none;
+  }
+
+  .nyse-season-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .nyse-season-name {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+
+  .nyse-season-sub {
+    font-size: 10px;
+    color: #6e7681;
+  }
+
+  .nyse-col {
+    text-align: center;
+    padding: 0 8px;
+  }
+
+  .nyse-time {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+  }
+
+  .nyse-mode-active {
+    background: rgba(255,255,255,0.04);
+  }
+
+  .nyse-active {
+    opacity: 1;
+  }
+
+  .nyse-time-value {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: 20px;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  .nyse-mode-active .nyse-time-value {
+    font-size: 22px;
+  }
+
+  .nyse-time-note {
+    font-size: 10px;
+    color: #6e7681;
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  .nyse-insight {
+    margin-top: 16px;
+    padding: 14px 18px;
+    background: rgba(240, 198, 84, 0.05);
+    border: 1px solid rgba(240, 198, 84, 0.15);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.65;
+  }
+
+  .nyse-insight strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  @media (max-width: 768px) {
+    .context-cards {
+      grid-template-columns: 1fr;
+    }
+
+    .nyse-header-row,
+    .nyse-row {
+      grid-template-columns: 120px 1fr 1fr 1fr;
+    }
+
+    .nyse-time-value {
+      font-size: 16px;
+    }
   }
 
   /* ─── Insight cards ──────────────────────────────────── */
