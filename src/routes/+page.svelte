@@ -714,7 +714,8 @@
   });
 
   onMount(() => {
-    document.fonts.ready.then(() => { fontsReady = true; draw(); });
+    const fontsPromise = document.fonts?.ready ?? Promise.resolve();
+    fontsPromise.then(() => { fontsReady = true; draw(); });
     setupOverlay();
     window.addEventListener('resize', () => { draw(); setupOverlay(); });
 
