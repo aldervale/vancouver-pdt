@@ -94,12 +94,12 @@ describe('Mode toggle buttons', () => {
     const modeToggle = container.querySelector('.mode-toggle')!;
     const buttons = modeToggle.querySelectorAll('button');
     expect(buttons).toHaveLength(3);
-    expect(buttons[0].textContent).toBe('Permanent PDT');
+    expect(buttons[0].textContent).toBe('Pacific Time (PCT)');
     expect(buttons[1].textContent).toBe('Old system (clock changes)');
     expect(buttons[2].textContent).toBe('Permanent PST');
   });
 
-  it('Permanent PDT button is active by default', () => {
+  it('Pacific Time (PCT) button is active by default', () => {
     const { container } = render(Page);
     const pdtBtn = container.querySelector('.mode-toggle button.mode-pdt')!;
     expect(pdtBtn.classList.contains('active')).toBe(true);
@@ -170,7 +170,7 @@ describe('Insight cards', () => {
     expect(container.querySelector('.insight-card.con')).toBeTruthy();
   });
 
-  it('shows PDT-specific insight text by default', () => {
+  it('shows PCT-specific insight text by default', () => {
     const { container } = render(Page);
     const proLabel = container.querySelector('.insight-card.pro .insight-label');
     const conLabel = container.querySelector('.insight-card.con .insight-label');
@@ -257,6 +257,17 @@ describe('Accessible controls and disclosure panels', () => {
 });
 
 describe('Honest comparison labels', () => {
+  it('labels the permanent UTC−7 scenario as PCT without changing its internal mode id', () => {
+    const { container } = render(Page);
+    const selectedMode = container.querySelector('.mode-toggle .mode-pdt');
+    expect(selectedMode).toHaveAccessibleName('Pacific Time (PCT)');
+    expect(selectedMode).toHaveAttribute('aria-pressed', 'true');
+    const pills = container.querySelectorAll('.mode-pill.pdt-pill');
+    expect(pills.length).toBeGreaterThan(0);
+    for (const pill of pills) expect(pill).toHaveTextContent(/^PCT$/);
+    expect(container.querySelector('.chart-subtitle')).toHaveTextContent('UTC−7');
+  });
+
   it('uses Old system consistently outside the descriptive main toggle', async () => {
     const { container } = render(Page);
     await fireEvent.click(screen.getByRole('button', { name: 'Old system (clock changes)', exact: true }));
@@ -287,6 +298,77 @@ describe('Honest comparison labels', () => {
     const project = footer.querySelector('a[href*="github.com/"][href$="/vancouver-pdt"]');
     expect(project).toBeInTheDocument();
     expect(project?.textContent?.trim()).toBeTruthy();
+  });
+});
+
+describe('Current Pacific Time policy and model scope', () => {
+  it('clearly states the adopted PCT policy rather than a future adoption', () => {
+    const { container } = render(Page);
+    const subtitle = container.querySelector('.subtitle');
+    expect(subtitle).toHaveTextContent('Pacific time (PCT, UTC−7)');
+    expect(subtitle).toHaveTextContent('last time on March 8, 2026');
+    expect(subtitle).toHaveTextContent('will not fall back on November 1');
+    expect(subtitle).not.toHaveTextContent(/is adopting|what.s coming/i);
+  });
+
+  it('presents the September policy update, regional exceptions and official U.S. assumptions', () => {
+    render(Page);
+    const policy = screen.getByRole('region', { name: 'What to know about Pacific Time' });
+    expect(policy).toHaveTextContent('September 17');
+    expect(policy).toHaveTextContent(/mountain-time arrangements differ/i);
+    expect(policy).toHaveTextContent('one hour ahead of Seattle after the November 1 fall-back');
+    expect(policy).toHaveTextContent('aligned during U.S. daylight time');
+    expect(policy).toHaveTextContent('not an established health advantage over permanent standard time');
+    const sources = [
+      ['September 17 provincial announcement', 'https://news.gov.bc.ca/releases/2026CITZ0009-001073'],
+      ['regional guidance', 'https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time'],
+      ['current U.S. clock rules', 'https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst'],
+    ];
+    for (const [name, href] of sources) {
+      const link = screen.getByRole('link', { name, exact: true });
+      expect(policy.contains(link)).toBe(true);
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    }
+  });
+
+  it('places a full-year scenario caveat before the controls and distinguishes actual 2026 history', () => {
+    const { container } = render(Page);
+    const note = container.querySelector('.scenario-note')!;
+    const policy = container.querySelector('.policy-update')!;
+    const controls = container.querySelector('.controls-row')!;
+    expect(policy.nextElementSibling).toBe(note);
+    expect(note.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(note).toHaveTextContent('full-year chart scenarios are comparisons');
+    expect(note).toHaveTextContent("not Vancouver's actual January–December 2026 clock history");
+    expect(note).toHaveTextContent('Vancouver used PST until the March 8 clock change, including January and February');
+    expect(note).toHaveTextContent('not an IANA time-zone identifier');
+  });
+
+  it('updates the accessible chart label with the selected comparison', async () => {
+    render(Page);
+    const chart = screen.getByRole('img', { name: /Vancouver sunrise and sunset comparison/i });
+    for (const [name, label] of [
+      ['Pacific Time (PCT)', 'Pacific Time (PCT)'],
+      ['Old system (clock changes)', 'old system'],
+      ['Permanent PST', 'permanent PST'],
+    ]) {
+      await fireEvent.click(screen.getByRole('button', { name, exact: true }));
+      expect(chart).toHaveAccessibleName(`Vancouver sunrise and sunset comparison under ${label}; summary values below`);
+    }
+  });
+
+  it('keeps sports illustrative and market comparisons independent of today', async () => {
+    const { container } = render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: /I like sports/ }));
+    const sports = container.querySelector('#panel-sports');
+    expect(sports).toHaveTextContent('Illustrative winter times');
+    expect(sports).toHaveTextContent('not a fixture calendar');
+    await fireEvent.click(screen.getByRole('button', { name: /I trade stocks/ }));
+    const stocks = container.querySelector('#panel-stocks');
+    expect(stocks).toHaveTextContent('current U.S. seasonal clock rules');
+    expect(stocks).toHaveTextContent('same as seasonal PDT');
+    expect(stocks).not.toHaveTextContent(/\b(today|now)\b/i);
   });
 });
 
@@ -456,7 +538,7 @@ describe('Evidence and chart readability', () => {
     expect(school).not.toHaveTextContent('elementary schools start at 8:45 AM');
   });
 
-  it.each(['Permanent PDT', 'Old system (clock changes)', 'Permanent PST'])(
+  it.each(['Pacific Time (PCT)', 'Old system (clock changes)', 'Permanent PST'])(
     '%s draws readable labels rather than tiny low-opacity axis text', async name => {
       render(Page);
       await act();

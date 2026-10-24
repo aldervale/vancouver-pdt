@@ -169,7 +169,7 @@
   });
 
   const modeLabel = $derived(
-    mode === 'pdt' ? 'permanent PDT' : mode === 'dst' ? 'old system' : 'permanent PST'
+    mode === 'pdt' ? 'Pacific Time (PCT)' : mode === 'dst' ? 'old system' : 'permanent PST'
   );
 
   // Month start day-of-year values (1-indexed)
@@ -241,12 +241,12 @@
       // For January, ET is EST = UTC-5. PDT (UTC-7) is 2h behind. 7PM EST = 5PM PDT.
       //
       // I'll go with the CORRECT math: 5 PM PDT, 4 PM PST/DST winter.
-      // This still tells the same story: permanent PDT = 1h later than PST for away games.
+      // This still tells the same story: Pacific Time (PCT) = 1h later than PST for away games.
       source: 'Game starts 7:00 PM EST (UTC−5) = 00:00 UTC',
       pdt: '5:00 PM',
       dst: '4:00 PM',
       pst: '4:00 PM',
-      takeaway: 'Permanent PDT: watch Canucks away games 1 hour later than standard time'
+      takeaway: 'Pacific Time (PCT): watch Canucks away games 1 hour later than standard time'
     },
     {
       icon: '🏆',
@@ -260,7 +260,7 @@
       pdt: '1:00 PM',
       dst: '12:00 PM',
       pst: '12:00 PM',
-      takeaway: 'Permanent PDT: Champions League knockout ties kick off at 1 PM, not noon'
+      takeaway: 'Pacific Time (PCT): Champions League knockout ties kick off at 1 PM, not noon'
     },
     {
       icon: '🏈',
@@ -274,7 +274,7 @@
       pdt: '11:00 AM',
       dst: '10:00 AM',
       pst: '10:00 AM',
-      takeaway: 'Permanent PDT: early NFL games start at 11 AM instead of 10 AM'
+      takeaway: 'Pacific Time (PCT): early NFL games start at 11 AM instead of 10 AM'
     }
   ];
 
@@ -757,7 +757,7 @@
       },
       steps: [
         { element: '.selector-row', popover: { title: 'Your schedule', description: 'Set your typical wake-up and bedtime to see how daylight fits your day.', side: 'bottom', align: 'start' } },
-        { element: '.mode-toggle', popover: { title: 'Three scenarios', description: 'Compare permanent PDT, the old clock-change system, and permanent standard time.', side: 'bottom', align: 'center' } },
+        { element: '.mode-toggle', popover: { title: 'Three scenarios', description: 'Compare Pacific Time (PCT), the old clock-change system, and permanent standard time.', side: 'bottom', align: 'center' } },
         { element: '.chart-wrapper', popover: { title: 'Your daylight', description: 'The gold band shows sunlight during your waking hours. Hover over any date to see exact sunrise and sunset times.', side: 'over', align: 'center' } },
         { element: '.context-toggle-grid', popover: { title: 'Your daily life', description: 'See how the time change affects sports, school mornings, evenings after work, and the stock market.', side: 'bottom', align: 'center' } },
       ],
@@ -767,8 +767,13 @@
 
   onMount(() => {
     let disposed = false;
+    // Render immediately with fallback fonts; a slow font must not hide the chart.
+    fontsReady = true;
+    draw();
+    const handleFontsLoaded = () => { if (!disposed) draw(); };
+    document.fonts?.addEventListener?.('loadingdone', handleFontsLoaded);
     const fontsPromise = document.fonts?.ready ?? Promise.resolve();
-    fontsPromise.then(() => { if (!disposed) { fontsReady = true; draw(); } });
+    fontsPromise.then(handleFontsLoaded);
     setupOverlay();
     const handleResize = () => { draw(); setupOverlay(); };
     window.addEventListener('resize', handleResize);
@@ -781,26 +786,42 @@
       clearTimeout(tourTimer);
       tour?.destroy();
       window.removeEventListener('resize', handleResize);
+      document.fonts?.removeEventListener?.('loadingdone', handleFontsLoaded);
     };
   });
 
 </script>
 
 <svelte:head>
-  <title>Vancouver Permanent Daylight Time — Daylight Impact</title>
+  <title>Vancouver Pacific Time (PCT) — Daylight Impact</title>
 </svelte:head>
 
 <div class="container">
   <header>
-    <div class="eyebrow">B.C. · Announced March 2, 2026</div>
+    <div class="eyebrow">B.C. · Policy checked October 24, 2026</div>
     <h1>No More Clock Changes<br />for Vancouver</h1>
     <p class="subtitle">
-      B.C. is adopting <strong>permanent daylight time (UTC−7)</strong> after the final spring-forward
-      on March 8, 2026. Here's how it reshapes the daylight you'll actually experience during your
-      waking hours.
+      Vancouver moved its clocks forward for the last time on March 8, 2026.
+      It will remain on <strong>Pacific time (PCT, UTC−7)</strong> and will not fall back on November 1.
+      Explore the later winter mornings and evenings for your waking hours.
     </p>
     <button class="tour-launch" onclick={startTour}>Take a quick tour</button>
   </header>
+
+  <section class="policy-update" aria-labelledby="policy-update-title">
+    <h2 id="policy-update-title">What to know about Pacific Time</h2>
+    <p>The <a href="https://news.gov.bc.ca/releases/2026CITZ0009-001073" target="_blank" rel="noopener">September 17 provincial announcement</a>
+      introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions.
+      Local mountain-time arrangements differ; see the province's
+      <a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">regional guidance</a>.
+    </p>
+    <p>Under <a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">current U.S. clock rules</a>,
+      Vancouver will be one hour ahead of Seattle after the November 1 fall-back and aligned during U.S. daylight time.
+      Later evening light also means later winter sunrises, not an established health advantage over permanent standard time.
+    </p>
+  </section>
+  <p class="scenario-note">These full-year chart scenarios are comparisons, not Vancouver's actual January–December 2026 clock history.
+    Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.</p>
 
   <div class="controls-row">
     <div class="selector-row">
@@ -825,7 +846,7 @@
     </div>
 
     <div class="mode-toggle" role="group" aria-label="Compare time systems">
-      <button class:active={mode === 'pdt'} class="mode-pdt" aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+      <button class:active={mode === 'pdt'} class="mode-pdt" aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Pacific Time (PCT)</button>
       <button class:active={mode === 'dst'} class="mode-dst" aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system (clock changes)</button>
       <button class:active={mode === 'pst'} class="mode-pst" aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
     </div>
@@ -836,7 +857,7 @@
       {#if mode === 'dst'}
         For comparison: how daylight looked under the old clock-change system.
       {:else}
-        The alternative B.C. was never offered — permanent standard time (UTC−8).
+        For comparison: permanent standard time (UTC−8).
       {/if}
     </div>
   {/if}
@@ -846,7 +867,7 @@
       <div class="chart-title">Daylight vs. Waking Hours</div>
       <div class="chart-subtitle">
         {#if mode === 'pdt'}
-          Permanent PDT (UTC−7) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
+          Pacific Time (PCT) (UTC−7) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
         {:else if mode === 'dst'}
           Old system (UTC−8 winter / UTC−7 summer) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
         {:else}
@@ -854,9 +875,9 @@
         {/if}
       </div>
     </div>
-    <div class="canvas-container">
-      <canvas bind:this={canvas}></canvas>
-      <canvas bind:this={overlayCanvas} class="overlay-canvas" onmousemove={handleMouseMove} onmouseleave={handleMouseLeave}></canvas>
+    <div class="canvas-container" role="img" aria-label="Vancouver sunrise and sunset comparison under {modeLabel}; summary values below">
+      <canvas bind:this={canvas} aria-hidden="true"></canvas>
+      <canvas bind:this={overlayCanvas} aria-hidden="true" class="overlay-canvas" onmousemove={handleMouseMove} onmouseleave={handleMouseLeave}></canvas>
     </div>
     <div class="legend">
       <div class="legend-item">
@@ -916,7 +937,7 @@
       {#if mode === 'pdt'}
         <div class="insight-label">Evening win</div>
         <div class="insight-text">
-          Under permanent PDT, sunset stays after 5 PM on <strong>{workDaylightDays.pdt} calendar days</strong> in the 2026 model — shifting evening light an hour later than permanent standard time.
+          Under Pacific Time (PCT), sunset stays after 5 PM on <strong>{workDaylightDays.pdt} calendar days</strong> in the 2026 model — shifting evening light an hour later than permanent standard time.
         </div>
       {:else if mode === 'dst'}
         <div class="insight-label">Familiar rhythm</div>
@@ -979,7 +1000,7 @@
           How the time system affects when you watch sports — using real winter UTC offsets.
         </div>
         <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
-          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Pacific Time (PCT)</button>
           <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system</button>
           <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
         </div>
@@ -995,7 +1016,7 @@
 
             <div class="sport-times">
               <div class="sport-time-row" class:active={mode === 'pdt'}>
-                <span class="mode-pill pdt-pill">PDT</span>
+                <span class="mode-pill pdt-pill">PCT</span>
                 <span class="sport-time-value">{sport.pdt}</span>
               </div>
               <div class="sport-time-row" class:active={mode === 'dst'}>
@@ -1014,7 +1035,7 @@
       </div>
 
       <div class="sports-footnote">
-        Times computed from UTC. Winter offsets: EST = UTC−5, CET = UTC+1. PDT = UTC−7 year-round; PST and old system winter = UTC−8.
+        Illustrative winter times computed from UTC, not a fixture calendar. Winter offsets: EST = UTC−5, CET = UTC+1. PCT = UTC−7 year-round; PST and old system winter = UTC−8.
       </div>
     </div>
   </div>
@@ -1028,16 +1049,16 @@
           An illustrative 8:30 AM reference time, not a universal school start or departure time.
           School schedules and travel times vary. This counts calendar days when the sun has not yet risen.
           Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
+            {mode === 'pdt' ? 'Pacific Time (PCT) (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
           </strong>
         </div>
       </div>
 
       <div class="context-cards">
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to PDT">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
           <div class="context-card-header">
-            <span class="mode-pill pdt-pill">PDT</span>
-            <span class="context-mode-label">Permanent PDT (UTC−7)</span>
+            <span class="mode-pill pdt-pill">PCT</span>
+            <span class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
           </div>
           <div class="context-big-number orange">{schoolDarkDays.pdt}</div>
           <div class="context-big-label">calendar days with sunrise after 8:30 AM</div>
@@ -1059,7 +1080,7 @@
             Worst day: <strong>{MONTH_NAMES[worstSunriseDST.date.getMonth()]} {worstSunriseDST.date.getDate()}</strong>
             — sunrise at <strong class="dst-grey">{fmtTime(worstSunriseDST.sunrise)}</strong>
           </div>
-          <div class="context-insight">The seasonal system moved winter sunrise an hour earlier than permanent PDT.</div>
+          <div class="context-insight">The seasonal system moved winter sunrise an hour earlier than Pacific Time (PCT).</div>
         </div>
 
         <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} role="button" tabindex="0" aria-pressed={mode === 'pst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pst'; } }} onclick={() => mode = 'pst'} title="Switch to PST">
@@ -1091,16 +1112,16 @@
         <div class="sports-subtitle">
           Calendar days when sunset is after 5:00 PM, a reference time for the end of a typical workday.
           Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
+            {mode === 'pdt' ? 'Pacific Time (PCT) (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
           </strong>
         </div>
       </div>
 
       <div class="context-cards">
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to PDT">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
           <div class="context-card-header">
-            <span class="mode-pill pdt-pill">PDT</span>
-            <span class="context-mode-label">Permanent PDT (UTC−7)</span>
+            <span class="mode-pill pdt-pill">PCT</span>
+            <span class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
           </div>
           <div class="context-big-number gold">{workDaylightDays.pdt}</div>
           <div class="context-big-label">calendar days with sunset after 5 PM</div>
@@ -1114,7 +1135,7 @@
             → <strong>{MONTH_NAMES[workDaylightRange.pdt.last.date.getMonth()]} {workDaylightRange.pdt.last.date.getDate()}</strong>
           </div>
           {/if}
-          <div class="context-insight">Permanent PDT's main benefit — evening daylight is shifted 1 hour later all year.</div>
+          <div class="context-insight">Pacific Time (PCT)'s main benefit — evening daylight is shifted 1 hour later all year.</div>
         </div>
 
         <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} role="button" tabindex="0" aria-pressed={mode === 'dst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'dst'; } }} onclick={() => mode = 'dst'} title="Switch to Old system">
@@ -1174,7 +1195,7 @@
           What time does the bell ring on your clock in Vancouver?
         </div>
         <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
-          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Pacific Time (PCT)</button>
           <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system</button>
           <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
         </div>
@@ -1184,7 +1205,7 @@
         <div class="nyse-header-row">
           <div class="nyse-season-label">Season</div>
           <div class="nyse-col">
-            <span class="mode-pill pdt-pill" class:nyse-active={mode === 'pdt'}>PDT</span>
+            <span class="mode-pill pdt-pill" class:nyse-active={mode === 'pdt'}>PCT</span>
           </div>
           <div class="nyse-col">
             <span class="mode-pill dst-pill" class:nyse-active={mode === 'dst'}>Old system</span>
@@ -1202,15 +1223,15 @@
           </div>
           <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'pdt'}>
             <span class="nyse-time-value">7:30 AM</span>
-            <span class="nyse-time-note">1hr later than today</span>
+            <span class="nyse-time-note">1hr later than PST</span>
           </div>
           <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'dst'}>
             <span class="nyse-time-value">6:30 AM</span>
-            <span class="nyse-time-note">same as now</span>
+            <span class="nyse-time-note">old winter time</span>
           </div>
           <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'pst'}>
             <span class="nyse-time-value">6:30 AM</span>
-            <span class="nyse-time-note">same as now</span>
+            <span class="nyse-time-note">old winter time</span>
           </div>
         </div>
 
@@ -1222,7 +1243,7 @@
           </div>
           <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'pdt'}>
             <span class="nyse-time-value">6:30 AM</span>
-            <span class="nyse-time-note">same as today</span>
+            <span class="nyse-time-note">same as seasonal PDT</span>
           </div>
           <div class="nyse-col nyse-time" class:nyse-mode-active={mode === 'dst'}>
             <span class="nyse-time-value">6:30 AM</span>
@@ -1236,11 +1257,11 @@
       </div>
 
       <div class="nyse-insight">
-        Under permanent PDT, NYSE opens at <strong>7:30 AM in winter</strong> — a full hour later than the current 6:30 AM under old system/PST. Better for sleep, trickier if you need to catch the open. Under permanent PST, summer trading starts at a brutal <strong>5:30 AM</strong>.
+        Under Pacific Time (PCT), NYSE opens at <strong>7:30 AM in winter</strong> — an hour later than 6:30 AM under the old system/PST. Under permanent PST, summer trading starts at <strong>5:30 AM</strong>. These comparisons assume current U.S. seasonal clock rules.
       </div>
 
       <div class="sports-footnote">
-        NYSE open = 9:30 AM ET. EST (UTC−5) Nov–Mar; EDT (UTC−4) Mar–Nov. PDT = UTC−7 year-round; PST = UTC−8 year-round; Old system = UTC−8 winter / UTC−7 summer.
+        NYSE open = 9:30 AM ET. EST (UTC−5) Nov–Mar; EDT (UTC−4) Mar–Nov. PCT = UTC−7 year-round; PST = UTC−8 year-round; Old system = UTC−8 winter / UTC−7 summer.
       </div>
     </div>
   </div>
@@ -1257,6 +1278,9 @@
         <div class="references-col">
           <div class="references-col-label">B.C. Coverage</div>
           <ul class="references-list">
+            <li><a href="https://news.gov.bc.ca/releases/2026CITZ0009-001073" target="_blank" rel="noopener">Official Pacific Time (PCT) announcement</a> — Government of B.C., September 17, 2026.</li>
+            <li><a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">Official year-round time and regional guidance</a> — Government of B.C., September 17, 2026.</li>
+            <li><a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">Current U.S. daylight saving time rules</a> — National Institute of Standards and Technology.</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/b-c-adopting-year-round-daylight-time-9.7111657" target="_blank" rel="noopener">Reactions mixed as B.C. ends time changes, adopts year-round daylight time</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/bc-permanent-daylight-saving-time-pacific-time-zone-clocks-9.7116954" target="_blank" rel="noopener">March 8 is the last time most British Columbians will change their clocks</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/bc-clocks-changing-timeline-9.7112204" target="_blank" rel="noopener">A timeline of how B.C. got to Pacific time year-round</a> — CBC News, Mar 2026</li>
@@ -1284,7 +1308,7 @@
       Sunrise/sunset computed with <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>
       for Vancouver (49.28°N, 123.12°W), daily values for 2026.
       Waking window is user-configurable above.
-      B.C. legislation passed March 2026. Permanent PDT takes effect after the final spring-forward on March 8, 2026.
+      Vancouver's transition to year-round UTC−7 began March 8, 2026; the PCT abbreviation was announced September 17, 2026.
     </div>
   </footer>
 </div>
@@ -1333,6 +1357,21 @@
     color: var(--text-primary);
     font-weight: 600;
   }
+
+  .policy-update {
+    margin-bottom: 16px;
+    padding: 18px 20px;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    background: var(--card-bg);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  .policy-update h2 { font-size: 17px; margin: 0 0 8px; }
+  .policy-update p + p { margin-top: 10px; }
+  .policy-update a { color: var(--accent-gold); text-decoration: underline; }
+  .scenario-note { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin-bottom: 24px; }
 
   /* ─── Controls row ───────────────────────────────────── */
 

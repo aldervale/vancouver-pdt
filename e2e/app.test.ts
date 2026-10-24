@@ -21,6 +21,13 @@ async function expectInsideViewport(locator: Locator, width: number, height?: nu
   }
 }
 
+async function pressTourKey(page: Page, key: 'ArrowRight' | 'ArrowLeft' | 'Escape') {
+  // Driver renders the next popover before its animation-frame transition finishes,
+  // even with animations disabled. Wait for the browser frame, not a fixed timeout.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+  await page.keyboard.press(key);
+}
+
 async function expectReadableButtonContrast(button: Locator) {
   const styles = await button.evaluate(element => {
     const style = getComputedStyle(element);
@@ -40,20 +47,86 @@ async function expectReadableButtonContrast(button: Locator) {
   expect((values[0] + 0.05) / (values[1] + 0.05), JSON.stringify(styles)).toBeGreaterThanOrEqual(4.5);
 }
 
-test.describe('Vancouver PDT App', () => {
+test.describe('Vancouver Pacific Time App', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('vdt_tour_done', '1');
     });
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
   });
 
   test('app loads and renders the title', async ({ page }) => {
     await expect(page.locator('h1')).toContainText('No More Clock Changes');
   });
 
-  test('subtitle shows PDT text by default', async ({ page }) => {
-    await expect(page.locator('.chart-subtitle')).toContainText('Permanent PDT');
+  test('subtitle shows Pacific Time (PCT) by default', async ({ page }) => {
+    await expect(page.locator('.chart-subtitle')).toContainText('Pacific Time (PCT)');
+  });
+
+  test('the current policy update links official B.C. and U.S. guidance', async ({ page }) => {
+    const policy = page.getByRole('region', { name: 'What to know about Pacific Time' });
+    await expect(policy).toBeVisible();
+    await expect(policy).toContainText('September 17');
+    await expect(policy).toContainText('PCT abbreviation for Pacific Time');
+    await expect(policy).toContainText('Local mountain-time arrangements differ');
+    await expect(policy).toContainText('one hour ahead of Seattle after the November 1 fall-back');
+    await expect(policy).toContainText('aligned during U.S. daylight time');
+    await expect(policy).toContainText('not an established health advantage over permanent standard time');
+    for (const [name, href] of [
+      ['September 17 provincial announcement', 'https://news.gov.bc.ca/releases/2026CITZ0009-001073'],
+      ['regional guidance', 'https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time'],
+      ['current U.S. clock rules', 'https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst'],
+    ]) {
+      const link = policy.getByRole('link', { name, exact: true });
+      await expect(link).toHaveAttribute('href', href);
+      await expect(link).toHaveAttribute('rel', /noopener/);
+    }
+    await expect(page.locator('.subtitle')).toContainText('Pacific time (PCT, UTC−7)');
+    await expect(page.locator('.subtitle')).toContainText('will not fall back on November 1');
+  });
+
+  test('full-year comparisons remain clearly distinguished from actual 2026 clock history', async ({ page }) => {
+    const note = page.locator('.scenario-note');
+    const chart = page.getByRole('img', { name: /Vancouver sunrise and sunset comparison/i });
+    for (const [name, chartLabel] of [
+      ['Pacific Time (PCT)', 'Pacific Time (PCT)'],
+      ['Old system (clock changes)', 'old system'],
+      ['Permanent PST', 'permanent PST'],
+    ]) {
+      await page.locator('.mode-toggle').getByRole('button', { name, exact: true }).click();
+      await expect(note).toBeVisible();
+      await expect(note).toContainText('full-year chart scenarios are comparisons');
+      await expect(note).toContainText("not Vancouver's actual January–December 2026 clock history");
+      await expect(note).toContainText('Vancouver used PST until the March 8 clock change, including January and February');
+      await expect(note).toContainText('not an IANA time-zone identifier');
+      await expect(chart).toHaveAccessibleName(`Vancouver sunrise and sunset comparison under ${chartLabel}; summary values below`);
+    }
+  });
+
+  test('page and sharing metadata use the current PCT name', async ({ page }) => {
+    await expect(page).toHaveTitle('Vancouver Pacific Time (PCT) — Daylight Impact');
+    for (const selector of ['meta[name="description"]', 'meta[property="og:description"]', 'meta[name="twitter:description"]']) {
+      await expect(page.locator(selector)).toHaveAttribute('content', /Pacific time \(PCT/i);
+      await expect(page.locator(selector)).not.toHaveAttribute('content', /is adopting/i);
+    }
+    for (const selector of ['meta[property="og:title"]', 'meta[name="twitter:title"]']) {
+      await expect(page.locator(selector)).toHaveAttribute('content', 'Vancouver Pacific Time (PCT) — Daylight Impact');
+    }
+  });
+
+  test('PCT labels stay consistent in all persona panels', async ({ page }) => {
+    await expect(page.locator('.mode-toggle').getByRole('button', { name: 'Pacific Time (PCT)', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    for (const name of personaNames) {
+      const toggle = page.getByRole('button', { name: new RegExp(name) });
+      await toggle.click();
+      const panel = await controlledPanel(page, toggle);
+      for (const pill of await panel.locator('.mode-pill.pdt-pill').all()) {
+        await expect(pill).toHaveText('PCT');
+      }
+      if (name === 'I like sports' || name === 'I trade stocks') {
+        await expect(panel.getByRole('button', { name: 'Pacific Time (PCT)', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      }
+    }
   });
 
   test('the old clock-change comparison has an unambiguous name everywhere', async ({ page }) => {
@@ -78,7 +151,7 @@ test.describe('Vancouver PDT App', () => {
 
   test('clicking Permanent PST shows the PST mode-note', async ({ page }) => {
     await page.locator('.mode-toggle').getByRole('button', { name: 'Permanent PST', exact: true }).click();
-    await expect(page.locator('.mode-note')).toContainText('The alternative B.C. was never offered');
+    await expect(page.locator('.mode-note')).toContainText('For comparison: permanent standard time (UTC−8)');
   });
 
   test('clicking Old system shows the clock-change comparison note', async ({ page }) => {
@@ -86,7 +159,7 @@ test.describe('Vancouver PDT App', () => {
     await expect(page.locator('.mode-note')).toContainText('how daylight looked under the old clock-change system');
   });
 
-  test('no mode-note visible in PDT mode', async ({ page }) => {
+  test('no comparison mode-note visible in PCT mode', async ({ page }) => {
     await expect(page.locator('.mode-note')).not.toBeVisible();
   });
 
@@ -224,7 +297,7 @@ test.describe('Vancouver PDT App', () => {
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
     test(`chart and controls fit a ${viewport.width}×${viewport.height} viewport in every mode`, async ({ page }) => {
       await page.setViewportSize(viewport);
-      for (const name of ['Permanent PDT', 'Old system (clock changes)', 'Permanent PST']) {
+      for (const name of ['Pacific Time (PCT)', 'Old system (clock changes)', 'Permanent PST']) {
         await page.locator('.mode-toggle').getByRole('button', { name, exact: true }).click();
         await expectInsideViewport(page.locator('.controls-row'), viewport.width);
         await expectInsideViewport(page.locator('.chart-wrapper'), viewport.width);
@@ -235,9 +308,57 @@ test.describe('Vancouver PDT App', () => {
   }
 });
 
+test('the chart paints and remains reactive while fonts never finish loading', async ({ page }) => {
+  let stylesheetRequests = 0;
+  let releaseStylesheets!: () => void;
+  const stylesheetsReleased = new Promise<void>(resolve => { releaseStylesheets = resolve; });
+  // Scope the stalled stylesheet to this test. DOMContentLoaded must not depend on it.
+  await page.route('https://fonts.googleapis.com/**', async route => {
+    stylesheetRequests++;
+    await stylesheetsReleased;
+    await route.abort();
+  });
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem('vdt_tour_done', '1');
+      Object.defineProperty(document.fonts, 'ready', {
+        configurable: true,
+        value: new Promise(() => {}),
+      });
+    });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect.poll(() => stylesheetRequests, { message: 'The font stylesheet request should still be pending' }).toBeGreaterThan(0);
+    const canvas = page.locator('.canvas-container canvas').first();
+    await expect(canvas).toBeVisible();
+    await expect(page.getByRole('img', { name: /comparison under Pacific Time \(PCT\)/ })).toBeVisible();
+    await expect.poll(() => canvas.evaluate(element => {
+      const chart = element as HTMLCanvasElement;
+      const context = chart.getContext('2d');
+      if (!context || !chart.width || !chart.height) return false;
+      const pixels = context.getImageData(0, 0, chart.width, chart.height).data;
+      for (let alpha = 3; alpha < pixels.length; alpha += 4) {
+        if (pixels[alpha] > 0) return true;
+      }
+      return false;
+    }), { message: 'The chart should paint without waiting for document.fonts.ready' }).toBe(true);
+
+    const initialPixels = await canvas.evaluate(element => (element as HTMLCanvasElement).toDataURL());
+    await page.locator('.mode-toggle').getByRole('button', { name: 'Permanent PST', exact: true }).click();
+    await expect(page.getByRole('img', { name: /comparison under permanent PST/ })).toBeVisible();
+    await expect(page.locator('.chart-subtitle')).toContainText('Permanent PST');
+    await expect.poll(() => canvas.evaluate((element, before) => (
+      (element as HTMLCanvasElement).toDataURL() !== before
+    ), initialPixels), { message: 'Changing the comparison should redraw while fonts remain pending' }).toBe(true);
+  } finally {
+    releaseStylesheets();
+    // Let every held handler abort its request before the page fixture is torn down.
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
 test.describe('Guided tour', () => {
   test('first visit is skippable, keeps the legacy dismissal key, and can be replayed', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.driver-popover')).toBeVisible();
     await expect(page.locator('.driver-popover-title')).toHaveText('Your schedule');
     await expect(page.getByRole('button', { name: 'Skip tour', exact: true })).toBeVisible();
@@ -246,7 +367,7 @@ test.describe('Guided tour', () => {
     await expect(page.locator('.driver-popover')).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.getItem('vdt_tour_done'))).toBe('1');
 
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Take a quick tour', exact: true })).toBeVisible();
     // The automatic tour uses a delayed start. Observe past that delay on a returning visit.
     await page.waitForTimeout(700);
@@ -261,20 +382,20 @@ test.describe('Guided tour', () => {
 
   test('the legacy completed-tour flag suppresses automatic onboarding', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('vdt_tour_done', '1'));
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Take a quick tour', exact: true })).toBeVisible();
     await page.waitForTimeout(700);
     await expect(page.locator('.driver-popover')).toHaveCount(0);
   });
 
   test('the tour supports keyboard advancement, Escape dismissal, and restores replay focus', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.driver-popover-title')).toHaveText('Your schedule');
-    await page.keyboard.press('ArrowRight');
+    await pressTourKey(page, 'ArrowRight');
     await expect(page.locator('.driver-popover-title')).toHaveText('Three scenarios');
-    await page.keyboard.press('ArrowLeft');
+    await pressTourKey(page, 'ArrowLeft');
     await expect(page.locator('.driver-popover-title')).toHaveText('Your schedule');
-    await page.keyboard.press('Escape');
+    await pressTourKey(page, 'Escape');
     await expect(page.locator('.driver-popover')).toHaveCount(0);
     await expect(page.locator('.driver-overlay')).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.getItem('vdt_tour_done'))).toBe('1');
@@ -283,7 +404,7 @@ test.describe('Guided tour', () => {
     await replay.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('.driver-popover-title')).toHaveText('Your schedule');
-    await page.keyboard.press('Escape');
+    await pressTourKey(page, 'Escape');
     await expect(page.locator('.driver-popover')).toHaveCount(0);
     await expect(replay).toBeFocused();
     await page.getByRole('button', { name: 'Later wake time', exact: true }).click();
@@ -291,7 +412,7 @@ test.describe('Guided tour', () => {
   });
 
   test('Skip and Back retain readable text contrast on focus and hover', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.driver-popover-title')).toHaveText('Your schedule');
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(page.locator('.driver-popover-title')).toHaveText('Three scenarios');
@@ -310,12 +431,12 @@ test.describe('Guided tour', () => {
       expect(await button.evaluate(element => element.matches(':hover'))).toBe(true);
       await expectReadableButtonContrast(button);
     }
-    await page.keyboard.press('Escape');
+    await pressTourKey(page, 'Escape');
     await expect(page.locator('.driver-popover')).toHaveCount(0);
   });
 
   test('source-link navigation and browser history do not restart a dismissed tour', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.driver-popover')).toBeVisible();
     await page.getByRole('button', { name: 'Skip tour', exact: true }).click();
     await expect(page.locator('.driver-popover')).toHaveCount(0);
@@ -345,13 +466,13 @@ test.describe('Guided tour', () => {
     await page.addInitScript(() => {
       Storage.prototype.setItem = () => { throw new DOMException('Storage is blocked', 'SecurityError'); };
     });
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.driver-popover')).toBeVisible();
     await page.getByRole('button', { name: 'Skip tour', exact: true }).click();
     await expect(page.locator('.driver-popover')).toHaveCount(0);
     await page.getByRole('button', { name: 'Take a quick tour', exact: true }).click();
     await expect(page.locator('.driver-popover')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await pressTourKey(page, 'Escape');
     await expect(page.locator('.driver-popover')).toHaveCount(0);
     await page.getByRole('button', { name: 'Later wake time', exact: true }).click();
     await expect(page.getByLabel('Wake up', { exact: true })).toHaveValue('8');
@@ -372,7 +493,7 @@ test.describe('Guided tour', () => {
           });
         }
       }, blocked);
-      await page.goto('/');
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
       const replay = page.getByRole('button', { name: 'Take a quick tour', exact: true });
       await expect(replay).toBeVisible();
       await page.waitForTimeout(700);
@@ -390,7 +511,7 @@ test.describe('Guided tour', () => {
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
     test(`all tour steps and dismissal controls fit a ${viewport.width}×${viewport.height} viewport`, async ({ page }) => {
       await page.setViewportSize(viewport);
-      await page.goto('/');
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
       const titles = ['Your schedule', 'Three scenarios', 'Your daylight', 'Your daily life'];
       for (const title of titles) {
         await expect(page.locator('.driver-popover-title')).toHaveText(title);
