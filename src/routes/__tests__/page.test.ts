@@ -1,12 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/svelte';
+import type { Config, Driver, PopoverDOM } from 'driver.js';
 import Page from '../+page.svelte';
+
+const mockDriver = vi.hoisted(() => {
+  const instance = { drive: vi.fn(), destroy: vi.fn(), isActive: vi.fn(() => false) };
+  return { instance, create: vi.fn(() => instance) };
+});
+vi.mock('driver.js', () => ({ driver: mockDriver.create }));
+
+const drawnText: { text: string; font: string; color: string }[] = [];
 
 // Mock canvas context
 const mockContext = {
   fillRect: vi.fn(),
   clearRect: vi.fn(),
-  fillText: vi.fn(),
+  fillText: vi.fn((text: string): void => {
+    drawnText.push({ text, font: mockContext.font, color: mockContext.fillStyle });
+  }),
   strokeText: vi.fn(),
   measureText: vi.fn(() => ({ width: 50 })),
   beginPath: vi.fn(),
@@ -35,6 +46,9 @@ const mockContext = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  drawnText.length = 0;
+  mockDriver.instance.isActive.mockReturnValue(false);
   HTMLCanvasElement.prototype.getContext = vi.fn(() => mockContext) as any;
   Element.prototype.getBoundingClientRect = vi.fn(() => ({
     width: 800, height: 600, top: 0, left: 0, right: 800, bottom: 600, x: 0, y: 0, toJSON: () => {},
@@ -44,6 +58,13 @@ beforeEach(() => {
     setItem: vi.fn(),
   });
   vi.stubGlobal('devicePixelRatio', 1);
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe('Page renders', () => {
@@ -74,7 +95,7 @@ describe('Mode toggle buttons', () => {
     const buttons = modeToggle.querySelectorAll('button');
     expect(buttons).toHaveLength(3);
     expect(buttons[0].textContent).toBe('Permanent PDT');
-    expect(buttons[1].textContent).toBe('Old DST');
+    expect(buttons[1].textContent).toBe('Old system (clock changes)');
     expect(buttons[2].textContent).toBe('Permanent PST');
   });
 
@@ -181,3 +202,289 @@ describe('References and footer', () => {
     expect(link!.getAttribute('href')).toBe('https://github.com/mourner/suncalc');
   });
 });
+
+
+describe('Accessible controls and disclosure panels', () => {
+  it('preserves the four distinct stepper button names and actions', async () => {
+    render(Page);
+    const wake = screen.getByLabelText('Wake up') as HTMLInputElement;
+    const sleep = screen.getByLabelText('Bedtime') as HTMLInputElement;
+    await fireEvent.click(screen.getByRole('button', { name: 'Later wake time', exact: true }));
+    expect(wake.value).toBe('8');
+    await fireEvent.click(screen.getByRole('button', { name: 'Earlier wake time', exact: true }));
+    expect(wake.value).toBe('7');
+    await fireEvent.click(screen.getByRole('button', { name: 'Earlier bedtime', exact: true }));
+    expect(sleep.value).toBe('22');
+    await fireEvent.click(screen.getByRole('button', { name: 'Later bedtime', exact: true }));
+    expect(sleep.value).toBe('23');
+  });
+
+  it.each(['I like sports', 'I have a kid', 'I work a 9-to-5', 'I trade stocks'])(
+    '%s identifies its panel and exposes the current state', async name => {
+      const { container } = render(Page);
+      const toggle = screen.getByRole('button', { name: new RegExp(name) });
+      const panelId = toggle.getAttribute('aria-controls');
+      expect(panelId).toBeTruthy();
+      const panel = container.querySelector(`[id="${panelId}"]`)!;
+      expect(panel).toBeInTheDocument();
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(panel).toHaveAttribute('aria-hidden', 'true');
+      expect(panel).toHaveProperty('inert', true);
+
+      await fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(panel).toHaveAttribute('aria-hidden', 'false');
+      expect(panel).toHaveProperty('inert', false);
+      await fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(panel).toHaveAttribute('aria-hidden', 'true');
+      expect(panel).toHaveProperty('inert', true);
+    }
+  );
+
+  it('gives every disclosure a distinct panel target and closes the previous panel', async () => {
+    const { container } = render(Page);
+    const toggles = Array.from(container.querySelectorAll('.context-toggle-grid button'));
+    const ids = toggles.map(toggle => toggle.getAttribute('aria-controls'));
+    expect(new Set(ids).size).toBe(4);
+    await fireEvent.click(toggles[0]);
+    await fireEvent.click(toggles[1]);
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(container.querySelector(`[id="${ids[0]}"]`)).toHaveProperty('inert', true);
+    expect(toggles[1]).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelector(`[id="${ids[1]}"]`)).toHaveProperty('inert', false);
+  });
+});
+
+describe('Honest comparison labels', () => {
+  it('uses Old system consistently outside the descriptive main toggle', async () => {
+    const { container } = render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Old system (clock changes)', exact: true }));
+    expect(container.querySelector('.chart-subtitle')).toHaveTextContent('Old system');
+    expect(container.querySelector('.stat-label')).toHaveTextContent(/old system/i);
+    expect(container).not.toHaveTextContent(/old DST/i);
+  });
+
+  it.each(['I have a kid', 'I work a 9-to-5'])(
+    '%s labels its annual counts as calendar-day thresholds', async name => {
+      const { container } = render(Page);
+      const toggle = screen.getByRole('button', { name: new RegExp(name) });
+      await fireEvent.click(toggle);
+      const panel = container.querySelector(`[id="${toggle.getAttribute('aria-controls')}"]`)!;
+      const labels = panel.querySelectorAll('.context-big-label');
+      expect(labels).toHaveLength(3);
+      for (const label of labels) expect(label).toHaveTextContent(/calendar (days|dates)/i);
+      expect(panel).toHaveTextContent(/weekends/i);
+      expect(panel).toHaveTextContent(/holidays/i);
+      expect(panel).not.toHaveTextContent(/days of dark morning commutes|days\/year you leave work|days commuting home in the dark/i);
+    }
+  );
+
+  it('credits both the astronomy library and this project', () => {
+    const { container } = render(Page);
+    const footer = container.querySelector('footer')!;
+    expect(footer.querySelector('a[href="https://github.com/mourner/suncalc"]')).toHaveTextContent('SunCalc');
+    const project = footer.querySelector('a[href*="github.com/"][href$="/vancouver-pdt"]');
+    expect(project).toBeInTheDocument();
+    expect(project?.textContent?.trim()).toBeTruthy();
+  });
+});
+
+function latestTourConfig(): Config {
+  return (mockDriver.create.mock.calls as unknown as [Config][]).at(-1)![0];
+}
+
+function simulateTourDestroyed(config = latestTourConfig()) {
+  config.onDestroyed?.(undefined, {}, { config, state: {}, driver: mockDriver.instance as unknown as Driver });
+}
+
+describe('Guided tour lifecycle', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('starts once for a first visit and leaves the page undimmed', async () => {
+    vi.mocked(localStorage.getItem).mockReturnValue(null);
+    render(Page);
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(mockDriver.create).toHaveBeenCalledTimes(1);
+    expect(mockDriver.instance.drive).toHaveBeenCalledTimes(1);
+    expect(latestTourConfig()).toMatchObject({ overlayOpacity: 0, showProgress: true });
+    expect(latestTourConfig().steps).toHaveLength(4);
+    expect(localStorage.getItem).toHaveBeenCalledWith('vdt_tour_done');
+  });
+
+  it('honors the legacy completed flag and exposes a manual replay', async () => {
+    render(Page);
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(mockDriver.create).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    expect(mockDriver.instance.drive).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders an explicit Skip tour control that destroys the active tour', async () => {
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    const config = latestTourConfig();
+    const footer = document.createElement('div');
+    const closeButton = document.createElement('button');
+    const previousButton = document.createElement('button');
+    const activeTour = { ...mockDriver.instance, isFirstStep: () => true } as unknown as Driver;
+    config.onPopoverRender?.({ footer, closeButton, previousButton } as PopoverDOM, {
+      config, state: {}, driver: activeTour,
+    });
+    const skip = footer.querySelector('button')!;
+    expect(skip).toHaveTextContent('Skip tour');
+    expect(skip).toHaveAttribute('type', 'button');
+    expect(closeButton).toHaveAccessibleName('Close tour');
+    expect(previousButton.hidden).toBe(true);
+    await fireEvent.click(skip);
+    expect(mockDriver.instance.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('manual replay cancels the pending automatic start and does not duplicate an active tour', async () => {
+    vi.mocked(localStorage.getItem).mockReturnValue(null);
+    render(Page);
+    const replay = screen.getByRole('button', { name: 'Take a quick tour', exact: true });
+    await fireEvent.click(replay);
+    mockDriver.instance.isActive.mockReturnValue(true);
+    await fireEvent.click(replay);
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(mockDriver.create).toHaveBeenCalledTimes(1);
+    expect(mockDriver.instance.drive).toHaveBeenCalledTimes(1);
+  });
+
+  it('respects reduced-motion preferences when starting the tour', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    expect(latestTourConfig().animate).toBe(false);
+  });
+
+  it('stores dismissal with the existing key', async () => {
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    simulateTourDestroyed();
+    expect(localStorage.setItem).toHaveBeenCalledWith('vdt_tour_done', '1');
+  });
+
+  it('remains usable when storage reads and writes throw', async () => {
+    vi.mocked(localStorage.getItem).mockImplementation(() => { throw new Error('Storage denied'); });
+    vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error('Storage full'); });
+    expect(() => render(Page)).not.toThrow();
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(mockDriver.create).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    expect(mockDriver.instance.drive).toHaveBeenCalled();
+    expect(() => simulateTourDestroyed()).not.toThrow();
+    await fireEvent.click(screen.getByRole('button', { name: 'Later wake time', exact: true }));
+    expect(screen.getByLabelText('Wake up')).toHaveValue('8');
+  });
+
+  it('remains usable when access to the localStorage object itself is denied', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() { throw new DOMException('Storage denied', 'SecurityError'); },
+    });
+    try {
+      expect(() => render(Page)).not.toThrow();
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+      expect(mockDriver.instance.drive).toHaveBeenCalled();
+      expect(() => simulateTourDestroyed()).not.toThrow();
+    } finally {
+      if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+    }
+  });
+
+  it('cancels delayed onboarding when the page unmounts', async () => {
+    vi.mocked(localStorage.getItem).mockReturnValue(null);
+    const { unmount } = render(Page);
+    unmount();
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(mockDriver.create).not.toHaveBeenCalled();
+  });
+
+  it('removes the exact resize listener and destroys an active tour on unmount', async () => {
+    const addListener = vi.spyOn(window, 'addEventListener');
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    mockDriver.instance.isActive.mockReturnValue(true);
+    const resizeListener = addListener.mock.calls.find(([type]) => type === 'resize')?.[1];
+    expect(resizeListener).toBeDefined();
+    unmount();
+    expect(removeListener).toHaveBeenCalledWith('resize', resizeListener);
+    expect(mockDriver.instance.destroy).toHaveBeenCalled();
+    addListener.mockRestore();
+    removeListener.mockRestore();
+  });
+});
+
+
+describe('Evidence and chart readability', () => {
+  it('links each health claim to an identifiable source and keeps the claim qualified', async () => {
+    const { container } = render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Old system (clock changes)', exact: true }));
+    const insight = container.querySelector('.insight-card.con')!;
+    expect(insight).toHaveTextContent(/observational studies/i);
+    expect(insight).toHaveTextContent(/Heart-attack findings vary/i);
+    expect(insight).toHaveTextContent(/permanent standard time/i);
+    const links = insight.querySelectorAll<HTMLAnchorElement>('a[href^="#ref-"]');
+    expect(links).toHaveLength(4);
+    for (const link of links) {
+      const reference = container.querySelector(link.getAttribute('href')!);
+      expect(reference).toBeInTheDocument();
+      expect(reference?.querySelector('a')).toHaveAttribute('href', expect.stringMatching(/^https:\/\//));
+    }
+    expect(container.querySelector('a[href*="currentbiology.com"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.ref-pro')).not.toBeInTheDocument();
+  });
+
+  it('cites school-specific schedules without presenting 8:30 as a universal start time', async () => {
+    const { container } = render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: /I have a kid/ }));
+    const school = container.querySelector('#panel-school')!;
+    expect(school).toHaveTextContent(/illustrative|threshold/i);
+    expect(school).toHaveTextContent(/times vary|schedules.*vary/i);
+    for (const link of school.querySelectorAll<HTMLAnchorElement>('a[href^="#ref-"]')) {
+      const reference = container.querySelector(link.getAttribute('href')!);
+      expect(reference?.querySelector('a')).toHaveAttribute('href', expect.stringMatching(/^https:\/\/www\.vsb\.bc\.ca\//));
+    }
+    expect(school.querySelectorAll('a[href^="#ref-school-"]')).toHaveLength(2);
+    expect(school).not.toHaveTextContent('elementary schools start at 8:45 AM');
+  });
+
+  it.each(['Permanent PDT', 'Old system (clock changes)', 'Permanent PST'])(
+    '%s draws readable labels rather than tiny low-opacity axis text', async name => {
+      render(Page);
+      await act();
+      drawnText.length = 0;
+      // Resizing invokes the same chart drawing path in every mode.
+      await fireEvent.click(screen.getByRole('button', { name, exact: true }));
+      await fireEvent(window, new Event('resize'));
+      expect(drawnText.length).toBeGreaterThan(20);
+      for (const label of drawnText) {
+        const fontSize = Number(label.font.match(/(\d+(?:\.\d+)?)px/)?.[1]);
+        expect(fontSize, `${label.text}: ${label.font}`).toBeGreaterThanOrEqual(12);
+      }
+      for (const text of ['5 AM', 'NOON', '12 AM', 'Jan', 'WAKE 7 AM', 'SLEEP 11 PM']) {
+        const label = drawnText.find(label => label.text === text);
+        expect(label, text).toBeDefined();
+        expect(contrastRatio(label!.color, '#0d1117'), text).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  );
+});
+
+function contrastRatio(foreground: string, background: string) {
+  function luminance(hex: string) {
+    expect(hex).toMatch(/^#[0-9a-f]{6}$/i);
+    const channels = [1, 3, 5].map(start => parseInt(hex.slice(start, start + 2), 16) / 255)
+      .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  }
+  const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}

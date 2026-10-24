@@ -79,7 +79,7 @@
   let openPanel: string | null = $state(null);
 
   // ── School start times stats (static, computed once) ──────────────────────
-  // Count days where sunrise > 8.5 (8:30 AM) — kid leaves for school in darkness
+  // Count calendar days with sunrise after the illustrative 8:30 AM threshold.
   const schoolDarkDays = {
     pdt: pdtData.filter(d => d.sunrise > 8.5).length,
     dst: dstData.filter(d => d.sunrise > 8.5).length,
@@ -91,7 +91,7 @@
   const worstSunrisePST = pstData.reduce((max, d) => d.sunrise > max.sunrise ? d : max, pstData[0]);
 
   // ── Work 9-5 stats (static, computed once) ────────────────────────────────
-  // Count days where sunset > 17.0 (5:00 PM) — worker leaves in daylight
+  // Count calendar days with sunset after 5:00 PM, not actual workdays.
   const workDaylightDays = {
     pdt: pdtData.filter(d => d.sunset > 17.0).length,
     dst: dstData.filter(d => d.sunset > 17.0).length,
@@ -169,7 +169,7 @@
   });
 
   const modeLabel = $derived(
-    mode === 'pdt' ? 'permanent PDT' : mode === 'dst' ? 'old DST' : 'permanent PST'
+    mode === 'pdt' ? 'permanent PDT' : mode === 'dst' ? 'old system' : 'permanent PST'
   );
 
   // Month start day-of-year values (1-indexed)
@@ -292,7 +292,7 @@
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement!.getBoundingClientRect();
-    const W = rect.width - 40;
+    const W = rect.width;
     const H = 420;
 
     canvas.width = W * dpr;
@@ -301,9 +301,9 @@
     canvas.style.height = H + 'px';
     ctx.scale(dpr, dpr);
 
-    const padLeft = 80;
-    const padRight = 82;
-    const padTop = mode === 'dst' ? 36 : 10;
+    const padLeft = 94;
+    const padRight = W < 500 ? 20 : 82;
+    const padTop = mode === 'dst' ? (W < 500 ? 70 : 44) : 18;
     const padBottom = 40;
 
     const chartW = W - padLeft - padRight;
@@ -457,44 +457,44 @@
 
       ctx.setLineDash([]);
 
-      ctx.font = '600 9px "DM Sans"';
+      ctx.font = '600 12px "DM Sans"';
       ctx.textAlign = 'center';
 
-      const labelY = padTop + 14;
+      const labelY = 18;
       const springLabel = '▲ Spring Forward';
       const fallLabel = '▼ Fall Back';
       const springW = ctx.measureText(springLabel).width + 12;
       const fallW = ctx.measureText(fallLabel).width + 12;
-      const badgeH = 16;
+      const badgeH = 22;
       const badgeR = 3;
 
       ctx.fillStyle = 'rgba(20, 28, 40, 0.82)';
       ctx.beginPath();
-      ctx.roundRect(springX - springW / 2, labelY - 11, springW, badgeH, badgeR);
+      ctx.roundRect(Math.max(padLeft, Math.min(springX - springW / 2, W - springW)), labelY - 11, springW, badgeH, badgeR);
       ctx.fill();
 
       ctx.strokeStyle = 'rgba(139, 148, 158, 0.4)';
       ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.roundRect(springX - springW / 2, labelY - 11, springW, badgeH, badgeR);
+      ctx.roundRect(Math.max(padLeft, Math.min(springX - springW / 2, W - springW)), labelY - 11, springW, badgeH, badgeR);
       ctx.stroke();
 
       ctx.fillStyle = '#a8b3bf';
-      ctx.fillText(springLabel, springX, labelY);
+      ctx.fillText(springLabel, Math.max(padLeft + springW / 2, Math.min(springX, W - springW / 2)), labelY);
 
       ctx.fillStyle = 'rgba(20, 28, 40, 0.82)';
       ctx.beginPath();
-      ctx.roundRect(fallX - fallW / 2, labelY - 11, fallW, badgeH, badgeR);
+      ctx.roundRect(Math.max(padLeft, Math.min(fallX - fallW / 2, W - fallW)), labelY - 11 + (chartW < 300 ? 24 : 0), fallW, badgeH, badgeR);
       ctx.fill();
 
       ctx.strokeStyle = 'rgba(139, 148, 158, 0.4)';
       ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.roundRect(fallX - fallW / 2, labelY - 11, fallW, badgeH, badgeR);
+      ctx.roundRect(Math.max(padLeft, Math.min(fallX - fallW / 2, W - fallW)), labelY - 11 + (chartW < 300 ? 24 : 0), fallW, badgeH, badgeR);
       ctx.stroke();
 
       ctx.fillStyle = '#a8b3bf';
-      ctx.fillText(fallLabel, fallX, labelY);
+      ctx.fillText(fallLabel, Math.max(padLeft + fallW / 2, Math.min(fallX, W - fallW / 2)), labelY + (chartW < 300 ? 24 : 0));
 
       ctx.restore();
     }
@@ -513,8 +513,8 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = 'rgba(230, 237, 243, 0.5)';
-    ctx.font = '600 9px "DM Sans"';
+    ctx.fillStyle = TEXT_MUTED;
+    ctx.font = '600 12px "DM Sans"';
     ctx.textAlign = 'right';
     ctx.fillText(`WAKE ${formatHour(WAKE)}`, padLeft - 6, wakeY + 3);
     ctx.fillText(`SLEEP ${formatHour(SLEEP)}`, padLeft - 6, sleepY + 3);
@@ -534,7 +534,7 @@
     ctx.stroke();
 
     // Curve labels (right side, at Dec 31 = day 365)
-    ctx.font = '600 10px "DM Sans"';
+    ctx.font = '600 12px "DM Sans"';
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e76f51';
     ctx.fillText('SUNRISE', W - 4, yPos(data[364].sunrise) + 3);
@@ -542,13 +542,13 @@
     ctx.fillText('SUNSET', W - 4, yPos(data[364].sunset) + 3);
 
     // Y-axis labels
-    ctx.font = '500 10px "DM Sans"';
+    ctx.font = '500 12px "DM Sans"';
     ctx.textAlign = 'right';
     for (let h = 5; h <= 26; h++) {
       if (h === WAKE || h === SLEEP) continue;
       const y = yPos(h);
       if (h === 12) {
-        ctx.fillStyle = 'rgba(230, 237, 243, 0.35)';
+        ctx.fillStyle = TEXT_MUTED;
         ctx.fillText('NOON', padLeft - 6, y + 3);
         ctx.strokeStyle = 'rgba(230, 237, 243, 0.06)';
         ctx.beginPath();
@@ -556,16 +556,16 @@
         ctx.lineTo(padLeft + chartW, y);
         ctx.stroke();
       } else if (h === 24) {
-        ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
+        ctx.fillStyle = TEXT_MUTED;
         ctx.fillText('12 AM', padLeft - 6, y + 3);
       } else if (h === 25) {
-        ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
+        ctx.fillStyle = TEXT_MUTED;
         ctx.fillText('1 AM', padLeft - 6, y + 3);
       } else if (h === 26) {
-        ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
+        ctx.fillStyle = TEXT_MUTED;
         ctx.fillText('2 AM', padLeft - 6, y + 3);
       } else {
-        ctx.fillStyle = 'rgba(230, 237, 243, 0.2)';
+        ctx.fillStyle = TEXT_MUTED;
         const label = h < 12 ? `${h} AM` : `${h - 12} PM`;
         ctx.fillText(label, padLeft - 6, y + 3);
       }
@@ -573,9 +573,10 @@
 
     // X-axis: month labels at 1st of each month
     ctx.fillStyle = TEXT_MUTED;
-    ctx.font = '600 11px "DM Sans"';
+    ctx.font = '600 12px "DM Sans"';
     ctx.textAlign = 'center';
     MONTH_START_DOY.forEach((doy, i) => {
+      if (chartW < 400 && i % 2 !== 0) return;
       ctx.fillText(MONTH_NAMES[i], xPosDoy(doy), padTop + chartH + 24);
     });
 
@@ -585,7 +586,7 @@
     const maxSunsetIdx = data.reduce((mi, d, i, arr) => d.sunset > arr[mi].sunset ? i : mi, 0);
     const minSunsetIdx = data.reduce((mi, d, i, arr) => d.sunset < arr[mi].sunset ? i : mi, 0);
 
-    ctx.font = '700 9px "DM Sans"';
+    ctx.font = '700 12px "DM Sans"';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#e76f51';
     // For each extremum label, flip below the curve if drawing above would clip the top edge
@@ -713,55 +714,76 @@
     }
   });
 
+  let tour: ReturnType<typeof driver> | undefined;
+  let tourTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function rememberTourDismissal() {
+    try { localStorage.setItem('vdt_tour_done', '1'); } catch { /* Storage may be blocked. */ }
+  }
+
+  function startTour() {
+    clearTimeout(tourTimer);
+    if (tour?.isActive()) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    tour = driver({
+      showProgress: true,
+      // Immediate steps keep keyboard navigation and early dismissal reliable.
+      animate: false,
+      overlayOpacity: 0,
+      stagePadding: 0,
+      popoverClass: 'daylight-tour',
+      nextBtnText: 'Next',
+      prevBtnText: 'Back',
+      doneBtnText: 'Done',
+      onDestroyStarted: (_element, _step, { driver: activeTour }) => {
+        rememberTourDismissal();
+        activeTour.destroy();
+      },
+      onDestroyed: () => {
+        rememberTourDismissal();
+        // Driver restores its own last-step focus after this callback.
+        queueMicrotask(() => { if (previousFocus?.isConnected) previousFocus.focus(); });
+      },
+      onPopoverRender: (popover, { driver: activeTour }) => {
+        popover.closeButton.setAttribute('aria-label', 'Close tour');
+        popover.previousButton.hidden = activeTour.isFirstStep();
+        popover.previousButton.style.display = activeTour.isFirstStep() ? 'none' : 'block';
+        const skip = document.createElement('button');
+        skip.type = 'button';
+        skip.className = 'tour-skip';
+        skip.textContent = 'Skip tour';
+        skip.addEventListener('click', () => { rememberTourDismissal(); activeTour.destroy(); });
+        popover.footer.prepend(skip);
+      },
+      steps: [
+        { element: '.selector-row', popover: { title: 'Your schedule', description: 'Set your typical wake-up and bedtime to see how daylight fits your day.', side: 'bottom', align: 'start' } },
+        { element: '.mode-toggle', popover: { title: 'Three scenarios', description: 'Compare permanent PDT, the old clock-change system, and permanent standard time.', side: 'bottom', align: 'center' } },
+        { element: '.chart-wrapper', popover: { title: 'Your daylight', description: 'The gold band shows sunlight during your waking hours. Hover over any date to see exact sunrise and sunset times.', side: 'over', align: 'center' } },
+        { element: '.context-toggle-grid', popover: { title: 'Your daily life', description: 'See how the time change affects sports, school mornings, evenings after work, and the stock market.', side: 'bottom', align: 'center' } },
+      ],
+    });
+    tour.drive();
+  }
+
   onMount(() => {
+    let disposed = false;
     const fontsPromise = document.fonts?.ready ?? Promise.resolve();
-    fontsPromise.then(() => { fontsReady = true; draw(); });
+    fontsPromise.then(() => { if (!disposed) { fontsReady = true; draw(); } });
     setupOverlay();
-    window.addEventListener('resize', () => { draw(); setupOverlay(); });
+    const handleResize = () => { draw(); setupOverlay(); };
+    window.addEventListener('resize', handleResize);
+    try {
+      if (!localStorage.getItem('vdt_tour_done')) tourTimer = setTimeout(startTour, 300);
+    } catch { /* If storage is blocked, keep the tour opt-in rather than repeat it. */ }
 
-    // Guided onboarding tour (first visit only)
-    if (!localStorage.getItem('vdt_tour_done')) {
-      setTimeout(() => {
-        const driverObj = driver({
-          showProgress: true,
-          onDestroyed: () => localStorage.setItem('vdt_tour_done', '1'),
-          steps: [
-            {
-              element: '.selector-row',
-              popover: {
-                title: 'Your schedule',
-                description: 'Set your typical wake-up and bedtime to see how daylight fits your day.',
-              }
-            },
-            {
-              element: '.mode-toggle',
-              popover: {
-                title: 'Three scenarios',
-                description: 'Compare permanent PDT (what\'s coming), the old clock-change system, and permanent standard time.',
-              }
-            },
-            {
-              element: '.chart-wrapper',
-              popover: {
-                title: 'Your daylight',
-                description: 'The gold band shows sunlight during your waking hours. Hover over any date to see exact sunrise and sunset times.',
-              }
-            },
-            {
-              element: '.context-toggle-grid',
-              popover: {
-                title: 'Your daily life',
-                description: 'See how the time change affects sports, school runs, work commutes, and the stock market.',
-              }
-            },
-          ],
-        });
-        driverObj.drive();
-      }, 300);
-    }
-
-    return () => window.removeEventListener('resize', () => { draw(); setupOverlay(); });
+    return () => {
+      disposed = true;
+      clearTimeout(tourTimer);
+      tour?.destroy();
+      window.removeEventListener('resize', handleResize);
+    };
   });
+
 </script>
 
 <svelte:head>
@@ -777,6 +799,7 @@
       on March 8, 2026. Here's how it reshapes the daylight you'll actually experience during your
       waking hours.
     </p>
+    <button class="tour-launch" onclick={startTour}>Take a quick tour</button>
   </header>
 
   <div class="controls-row">
@@ -784,27 +807,27 @@
       <div class="selector">
         <label for="wake-slider">Wake up</label>
         <div class="stepper">
-          <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time">−</button>
+          <button onclick={() => { if (wakeHour > 4) wakeHour-- }} aria-label="Earlier wake time" disabled={wakeHour <= 4}>−</button>
           <span class="stepper-value">{formatHour(wakeHour)}</span>
-          <button onclick={() => { if (wakeHour < 12) wakeHour++ }} aria-label="Later wake time">+</button>
+          <button onclick={() => { if (wakeHour < 12) wakeHour++ }} aria-label="Later wake time" disabled={wakeHour >= 12}>+</button>
         </div>
         <input id="wake-slider" type="range" min="4" max="12" bind:value={wakeHour} />
       </div>
       <div class="selector">
         <label for="sleep-slider">Bedtime</label>
         <div class="stepper">
-          <button onclick={() => { if (sleepHour > 18) sleepHour-- }} aria-label="Earlier bedtime">−</button>
+          <button onclick={() => { if (sleepHour > 18) sleepHour-- }} aria-label="Earlier bedtime" disabled={sleepHour <= 18}>−</button>
           <span class="stepper-value">{formatHour(sleepHour)}</span>
-          <button onclick={() => { if (sleepHour < 26) sleepHour++ }} aria-label="Later bedtime">+</button>
+          <button onclick={() => { if (sleepHour < 26) sleepHour++ }} aria-label="Later bedtime" disabled={sleepHour >= 26}>+</button>
         </div>
         <input id="sleep-slider" type="range" min="18" max="26" bind:value={sleepHour} />
       </div>
     </div>
 
     <div class="mode-toggle" role="group" aria-label="Compare time systems">
-      <button class:active={mode === 'pdt'} class="mode-pdt" onclick={() => mode = 'pdt'}>Permanent PDT</button>
-      <button class:active={mode === 'dst'} class="mode-dst" onclick={() => mode = 'dst'}>Old DST</button>
-      <button class:active={mode === 'pst'} class="mode-pst" onclick={() => mode = 'pst'}>Permanent PST</button>
+      <button class:active={mode === 'pdt'} class="mode-pdt" aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+      <button class:active={mode === 'dst'} class="mode-dst" aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system (clock changes)</button>
+      <button class:active={mode === 'pst'} class="mode-pst" aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
     </div>
   </div>
 
@@ -825,7 +848,7 @@
         {#if mode === 'pdt'}
           Permanent PDT (UTC−7) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
         {:else if mode === 'dst'}
-          Old DST (UTC−8 winter / UTC−7 summer) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
+          Old system (UTC−8 winter / UTC−7 summer) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
         {:else}
           Permanent PST (UTC−8) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
         {/if}
@@ -893,7 +916,7 @@
       {#if mode === 'pdt'}
         <div class="insight-label">Evening win</div>
         <div class="insight-text">
-          Under permanent PDT, sunset stays after 5 PM from <strong>late February through late October</strong> — giving you evening daylight for most of the year.
+          Under permanent PDT, sunset stays after 5 PM on <strong>{workDaylightDays.pdt} calendar days</strong> in the 2026 model — shifting evening light an hour later than permanent standard time.
         </div>
       {:else if mode === 'dst'}
         <div class="insight-label">Familiar rhythm</div>
@@ -916,7 +939,7 @@
       {:else if mode === 'dst'}
         <div class="insight-label">The hidden cost</div>
         <div class="insight-text">
-          Clock changes aren't just annoying. Research links them to spikes in <strong>heart attacks, accidents, and disrupted sleep</strong> in the days after each transition.
+          Spring clock changes can <a href="#ref-sleep">disrupt sleep</a> and have been linked in some observational studies to <a href="#ref-crashes">more fatal crashes</a>. <a href="#ref-heart">Heart-attack findings vary</a>. Ending clock changes is a separate choice from permanent daylight time: <a href="#ref-aasm">sleep specialists favor permanent standard time</a>.
         </div>
       {:else}
         <div class="insight-label">Evening trade-off</div>
@@ -929,26 +952,26 @@
 
   <!-- Context panel toggles — 2×2 grid -->
   <div class="context-toggle-grid">
-    <button class="sports-btn" class:active={openPanel === 'sports'} onclick={() => openPanel = openPanel === 'sports' ? null : 'sports'}>
+    <button class="sports-btn" class:active={openPanel === 'sports'} aria-expanded={openPanel === 'sports'} aria-controls="panel-sports" onclick={() => openPanel = openPanel === 'sports' ? null : 'sports'}>
       🏒 I like sports
-      <span class="sports-btn-chevron" class:open={openPanel === 'sports'}>▾</span>
+      <span aria-hidden="true" class="sports-btn-chevron" class:open={openPanel === 'sports'}>▾</span>
     </button>
-    <button class="sports-btn" class:active={openPanel === 'school'} onclick={() => openPanel = openPanel === 'school' ? null : 'school'}>
+    <button class="sports-btn" class:active={openPanel === 'school'} aria-expanded={openPanel === 'school'} aria-controls="panel-school" onclick={() => openPanel = openPanel === 'school' ? null : 'school'}>
       👧 I have a kid
-      <span class="sports-btn-chevron" class:open={openPanel === 'school'}>▾</span>
+      <span aria-hidden="true" class="sports-btn-chevron" class:open={openPanel === 'school'}>▾</span>
     </button>
-    <button class="sports-btn" class:active={openPanel === 'work'} onclick={() => openPanel = openPanel === 'work' ? null : 'work'}>
+    <button class="sports-btn" class:active={openPanel === 'work'} aria-expanded={openPanel === 'work'} aria-controls="panel-work" onclick={() => openPanel = openPanel === 'work' ? null : 'work'}>
       💼 I work a 9-to-5
-      <span class="sports-btn-chevron" class:open={openPanel === 'work'}>▾</span>
+      <span aria-hidden="true" class="sports-btn-chevron" class:open={openPanel === 'work'}>▾</span>
     </button>
-    <button class="sports-btn" class:active={openPanel === 'stocks'} onclick={() => openPanel = openPanel === 'stocks' ? null : 'stocks'}>
+    <button class="sports-btn" class:active={openPanel === 'stocks'} aria-expanded={openPanel === 'stocks'} aria-controls="panel-stocks" onclick={() => openPanel = openPanel === 'stocks' ? null : 'stocks'}>
       📈 I trade stocks
-      <span class="sports-btn-chevron" class:open={openPanel === 'stocks'}>▾</span>
+      <span aria-hidden="true" class="sports-btn-chevron" class:open={openPanel === 'stocks'}>▾</span>
     </button>
   </div>
 
   <!-- Sports panel -->
-  <div class="sports-panel" class:open={openPanel === 'sports'} aria-hidden={openPanel !== 'sports'}>
+  <div id="panel-sports" class="sports-panel" class:open={openPanel === 'sports'} aria-hidden={openPanel !== 'sports'} inert={openPanel !== 'sports'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
         <div class="sports-title">Game Times in Vancouver</div>
@@ -956,9 +979,9 @@
           How the time system affects when you watch sports — using real winter UTC offsets.
         </div>
         <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
-          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
-          <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} onclick={() => mode = 'dst'}>Old DST</button>
-          <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
+          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+          <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system</button>
+          <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
         </div>
       </div>
 
@@ -976,7 +999,7 @@
                 <span class="sport-time-value">{sport.pdt}</span>
               </div>
               <div class="sport-time-row" class:active={mode === 'dst'}>
-                <span class="mode-pill dst-pill">Old DST</span>
+                <span class="mode-pill dst-pill">Old system</span>
                 <span class="sport-time-value">{sport.dst}</span>
               </div>
               <div class="sport-time-row" class:active={mode === 'pst'}>
@@ -991,102 +1014,102 @@
       </div>
 
       <div class="sports-footnote">
-        Times computed from UTC. Winter offsets: EST = UTC−5, CET = UTC+1. PDT = UTC−7 year-round; PST and old DST winter = UTC−8.
+        Times computed from UTC. Winter offsets: EST = UTC−5, CET = UTC+1. PDT = UTC−7 year-round; PST and old system winter = UTC−8.
       </div>
     </div>
   </div>
 
   <!-- School Start Times panel -->
-  <div class="sports-panel" class:open={openPanel === 'school'} aria-hidden={openPanel !== 'school'}>
+  <div id="panel-school" class="sports-panel" class:open={openPanel === 'school'} aria-hidden={openPanel !== 'school'} inert={openPanel !== 'school'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
-        <div class="sports-title">School Start Times & Dark Mornings</div>
+        <div class="sports-title">School Mornings & Sunrise</div>
         <div class="sports-subtitle">
-          Vancouver elementary schools start at 8:45 AM; middle/secondary at 8:30 AM.
-          Days where sunrise is after 8:30 AM = kids leave for school before sunrise.
+          An illustrative 8:30 AM reference time, not a universal school start or departure time.
+          School schedules and travel times vary. This counts calendar days when the sun has not yet risen.
           Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST' : 'Permanent PST (UTC−8)'}
+            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
           </strong>
         </div>
       </div>
 
       <div class="context-cards">
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} onclick={() => mode = 'pdt'} title="Switch to PDT">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to PDT">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PDT</span>
             <span class="context-mode-label">Permanent PDT (UTC−7)</span>
           </div>
           <div class="context-big-number orange">{schoolDarkDays.pdt}</div>
-          <div class="context-big-label">days of dark morning commutes</div>
+          <div class="context-big-label">calendar days with sunrise after 8:30 AM</div>
           <div class="context-detail">
             Worst day: <strong>{MONTH_NAMES[worstSunrisePDT.date.getMonth()]} {worstSunrisePDT.date.getDate()}</strong>
             — sunrise at <strong class="orange">{fmtTime(worstSunrisePDT.sunrise)}</strong>
           </div>
-          <div class="context-insight">Sun rises after 8:30 AM for ~{Math.round(schoolDarkDays.pdt / 30.4)} months. The 1-hour shift from PST means more dark mornings for kids.</div>
+          <div class="context-insight">Sun rises after 8:30 AM for ~{Math.round(schoolDarkDays.pdt / 30.4)} months. The 1-hour shift from PST means more mornings before sunrise at this reference time.</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} onclick={() => mode = 'dst'} title="Switch to Old DST">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} role="button" tabindex="0" aria-pressed={mode === 'dst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'dst'; } }} onclick={() => mode = 'dst'} title="Switch to Old system">
           <div class="context-card-header">
-            <span class="mode-pill dst-pill">DST</span>
-            <span class="context-mode-label">Old DST (UTC−8 winter)</span>
+            <span class="mode-pill dst-pill">Seasonal</span>
+            <span class="context-mode-label">Old system (UTC−8 winter)</span>
           </div>
           <div class="context-big-number dst-grey">{schoolDarkDays.dst}</div>
-          <div class="context-big-label">days of dark morning commutes</div>
+          <div class="context-big-label">calendar days with sunrise after 8:30 AM</div>
           <div class="context-detail">
             Worst day: <strong>{MONTH_NAMES[worstSunriseDST.date.getMonth()]} {worstSunriseDST.date.getDate()}</strong>
             — sunrise at <strong class="dst-grey">{fmtTime(worstSunriseDST.sunrise)}</strong>
           </div>
-          <div class="context-insight">The clock change gave earlier winter sunrises — kids benefited from darker evenings but brighter mornings.</div>
+          <div class="context-insight">The seasonal system moved winter sunrise an hour earlier than permanent PDT.</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} onclick={() => mode = 'pst'} title="Switch to PST">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} role="button" tabindex="0" aria-pressed={mode === 'pst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pst'; } }} onclick={() => mode = 'pst'} title="Switch to PST">
           <div class="context-card-header">
             <span class="mode-pill pst-pill">PST</span>
             <span class="context-mode-label">Permanent PST (UTC−8)</span>
           </div>
           <div class="context-big-number blue">{schoolDarkDays.pst}</div>
-          <div class="context-big-label">days of dark morning commutes</div>
+          <div class="context-big-label">calendar days with sunrise after 8:30 AM</div>
           <div class="context-detail">
             Worst day: <strong>{MONTH_NAMES[worstSunrisePST.date.getMonth()]} {worstSunrisePST.date.getDate()}</strong>
             — sunrise at <strong class="blue">{fmtTime(worstSunrisePST.sunrise)}</strong>
           </div>
-          <div class="context-insight">PST wins for school mornings — earlier sunrises mean fewer dark commutes for kids all year.</div>
+          <div class="context-insight">Permanent PST has the fewest dates with sunrise after this reference time.</div>
         </div>
       </div>
 
       <div class="sports-footnote">
-        Dark morning = sunrise after 8:30 AM. Elementary schools start 8:45 AM, middle/secondary 8:30 AM. PST has the fewest dark morning commutes; permanent PDT has the most.
+        Counts include all 365 dates in 2026, including weekends and school holidays. Before sunrise does not mean completely dark: twilight is not modeled. Actual school times vary: <a href="#ref-school-secondary">VSB secondary guidance</a> uses 8:40 AM, while <a href="#ref-school-elementary">David Oppenheimer Elementary</a> lists 9:00 AM. Check your own school and travel time.
       </div>
     </div>
   </div>
 
   <!-- 9-5 Work panel -->
-  <div class="sports-panel" class:open={openPanel === 'work'} aria-hidden={openPanel !== 'work'}>
+  <div id="panel-work" class="sports-panel" class:open={openPanel === 'work'} aria-hidden={openPanel !== 'work'} inert={openPanel !== 'work'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
         <div class="sports-title">Leaving Work in Daylight</div>
         <div class="sports-subtitle">
-          Days per year where sunset is after 5:00 PM — you walk out of the office into daylight.
+          Calendar days when sunset is after 5:00 PM, a reference time for the end of a typical workday.
           Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old DST' : 'Permanent PST (UTC−8)'}
+            {mode === 'pdt' ? 'Permanent PDT (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
           </strong>
         </div>
       </div>
 
       <div class="context-cards">
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} onclick={() => mode = 'pdt'} title="Switch to PDT">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to PDT">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PDT</span>
             <span class="context-mode-label">Permanent PDT (UTC−7)</span>
           </div>
           <div class="context-big-number gold">{workDaylightDays.pdt}</div>
-          <div class="context-big-label">days/year you leave work in daylight</div>
+          <div class="context-big-label">calendar days with sunset after 5 PM</div>
           <div class="context-detail">
-            {365 - workDaylightDays.pdt} days commuting home in the dark
+            {365 - workDaylightDays.pdt} calendar days with sunset at or before 5 PM
           </div>
           {#if workDaylightRange.pdt.first && workDaylightRange.pdt.last}
           <div class="context-detail">
-            Daylight-after-5 runs
+            Dates with sunset after 5 PM:
             <strong>{MONTH_NAMES[workDaylightRange.pdt.first.date.getMonth()]} {workDaylightRange.pdt.first.date.getDate()}</strong>
             → <strong>{MONTH_NAMES[workDaylightRange.pdt.last.date.getMonth()]} {workDaylightRange.pdt.last.date.getDate()}</strong>
           </div>
@@ -1094,39 +1117,39 @@
           <div class="context-insight">Permanent PDT's main benefit — evening daylight is shifted 1 hour later all year.</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} onclick={() => mode = 'dst'} title="Switch to Old DST">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} role="button" tabindex="0" aria-pressed={mode === 'dst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'dst'; } }} onclick={() => mode = 'dst'} title="Switch to Old system">
           <div class="context-card-header">
-            <span class="mode-pill dst-pill">DST</span>
-            <span class="context-mode-label">Old DST (UTC−8 winter)</span>
+            <span class="mode-pill dst-pill">Seasonal</span>
+            <span class="context-mode-label">Old system (UTC−8 winter)</span>
           </div>
           <div class="context-big-number dst-grey">{workDaylightDays.dst}</div>
-          <div class="context-big-label">days/year you leave work in daylight</div>
+          <div class="context-big-label">calendar days with sunset after 5 PM</div>
           <div class="context-detail">
-            {365 - workDaylightDays.dst} days commuting home in the dark
+            {365 - workDaylightDays.dst} calendar days with sunset at or before 5 PM
           </div>
           {#if workDaylightRange.dst.first && workDaylightRange.dst.last}
           <div class="context-detail">
-            Daylight-after-5 runs
+            Dates with sunset after 5 PM:
             <strong>{MONTH_NAMES[workDaylightRange.dst.first.date.getMonth()]} {workDaylightRange.dst.first.date.getDate()}</strong>
             → <strong>{MONTH_NAMES[workDaylightRange.dst.last.date.getMonth()]} {workDaylightRange.dst.last.date.getDate()}</strong>
           </div>
           {/if}
-          <div class="context-insight">Old DST gave you evening daylight in summer but short winter days at 5 PM.</div>
+          <div class="context-insight">Old system gave you evening daylight in summer but short winter days at 5 PM.</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} onclick={() => mode = 'pst'} title="Switch to PST">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} role="button" tabindex="0" aria-pressed={mode === 'pst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pst'; } }} onclick={() => mode = 'pst'} title="Switch to PST">
           <div class="context-card-header">
             <span class="mode-pill pst-pill">PST</span>
             <span class="context-mode-label">Permanent PST (UTC−8)</span>
           </div>
           <div class="context-big-number blue">{workDaylightDays.pst}</div>
-          <div class="context-big-label">days/year you leave work in daylight</div>
+          <div class="context-big-label">calendar days with sunset after 5 PM</div>
           <div class="context-detail">
-            {365 - workDaylightDays.pst} days commuting home in the dark
+            {365 - workDaylightDays.pst} calendar days with sunset at or before 5 PM
           </div>
           {#if workDaylightRange.pst.first && workDaylightRange.pst.last}
           <div class="context-detail">
-            Daylight-after-5 runs
+            Dates with sunset after 5 PM:
             <strong>{MONTH_NAMES[workDaylightRange.pst.first.date.getMonth()]} {workDaylightRange.pst.first.date.getDate()}</strong>
             → <strong>{MONTH_NAMES[workDaylightRange.pst.last.date.getMonth()]} {workDaylightRange.pst.last.date.getDate()}</strong>
           </div>
@@ -1136,13 +1159,13 @@
       </div>
 
       <div class="sports-footnote">
-        Daylight after 5 PM = sunset after 17:00. Permanent PDT has significantly more evenings with sunlight after the workday ends.
+        Counts cover all 365 dates in 2026, including weekends and holidays, not actual commutes. The two counts add up to 365. Sunset at or before 5 PM does not mean complete darkness: twilight and travel time are not modeled. The old system uses UTC−8 in winter and UTC−7 in summer, changing on March 8 and November 1.
       </div>
     </div>
   </div>
 
   <!-- NYSE Opens panel -->
-  <div class="sports-panel" class:open={openPanel === 'stocks'} aria-hidden={openPanel !== 'stocks'}>
+  <div id="panel-stocks" class="sports-panel" class:open={openPanel === 'stocks'} aria-hidden={openPanel !== 'stocks'} inert={openPanel !== 'stocks'}>
     <div class="sports-panel-inner">
       <div class="sports-header">
         <div class="sports-title">NYSE Open — Vancouver Clock Time</div>
@@ -1151,9 +1174,9 @@
           What time does the bell ring on your clock in Vancouver?
         </div>
         <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
-          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
-          <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} onclick={() => mode = 'dst'}>Old DST</button>
-          <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
+          <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Permanent PDT</button>
+          <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system</button>
+          <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
         </div>
       </div>
 
@@ -1164,7 +1187,7 @@
             <span class="mode-pill pdt-pill" class:nyse-active={mode === 'pdt'}>PDT</span>
           </div>
           <div class="nyse-col">
-            <span class="mode-pill dst-pill" class:nyse-active={mode === 'dst'}>Old DST</span>
+            <span class="mode-pill dst-pill" class:nyse-active={mode === 'dst'}>Old system</span>
           </div>
           <div class="nyse-col">
             <span class="mode-pill pst-pill" class:nyse-active={mode === 'pst'}>PST</span>
@@ -1213,16 +1236,21 @@
       </div>
 
       <div class="nyse-insight">
-        Under permanent PDT, NYSE opens at <strong>7:30 AM in winter</strong> — a full hour later than the current 6:30 AM under old DST/PST. Better for sleep, trickier if you need to catch the open. Under permanent PST, summer trading starts at a brutal <strong>5:30 AM</strong>.
+        Under permanent PDT, NYSE opens at <strong>7:30 AM in winter</strong> — a full hour later than the current 6:30 AM under old system/PST. Better for sleep, trickier if you need to catch the open. Under permanent PST, summer trading starts at a brutal <strong>5:30 AM</strong>.
       </div>
 
       <div class="sports-footnote">
-        NYSE open = 9:30 AM ET. EST (UTC−5) Nov–Mar; EDT (UTC−4) Mar–Nov. PDT = UTC−7 year-round; PST = UTC−8 year-round; Old DST = UTC−8 winter / UTC−7 summer.
+        NYSE open = 9:30 AM ET. EST (UTC−5) Nov–Mar; EDT (UTC−4) Mar–Nov. PDT = UTC−7 year-round; PST = UTC−8 year-round; Old system = UTC−8 winter / UTC−7 summer.
       </div>
     </div>
   </div>
 
   <footer>
+    <div class="about-project">
+      <strong>About BC Daylight</strong>
+      <p>An independent, open-source comparison of Vancouver daylight under three clock systems. Created by Adam Stuckert. <a href="https://github.com/aldervale/vancouver-pdt" target="_blank" rel="noopener">Source code &amp; feedback</a>.</p>
+      <p>Model year: 2026 · Site update: <time datetime="2026-10-24">October 24, 2026</time>.</p>
+    </div>
     <div class="references-section">
       <div class="references-title">References &amp; Further Reading</div>
       <div class="references-grid">
@@ -1237,13 +1265,17 @@
           </ul>
         </div>
         <div class="references-col">
-          <div class="references-col-label">Science &amp; Debate</div>
+          <div class="references-col-label">Science &amp; School Sources</div>
           <ul class="references-list">
-            <li><a href="https://www.cbc.ca/news/canada/bc-daylight-saving-health-concerns-9.7114947" target="_blank" rel="noopener">'Scientifically not a good idea,' says researcher — health concerns over permanent PDT</a> — CBC News, Mar 2026 <span class="ref-tag ref-con">con</span></li>
+            <li><a href="https://www.cbc.ca/news/canada/bc-daylight-saving-health-concerns-9.7114947" target="_blank" rel="noopener">'Scientifically not a good idea,' says researcher — health concerns over permanent PDT</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/daylight-saving-time-canada-9.7113377" target="_blank" rel="noopener">B.C. is moving to permanent daylight time. Could your province be next?</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/london/should-ontario-follow-bc-daylight-savings-9.7113343" target="_blank" rel="noopener">B.C. is scrapping time changes. Should Ontario be next?</a> — CBC News, Mar 2026</li>
-            <li><a href="https://www.science.org/content/article/does-daylight-saving-time-affect-our-health" target="_blank" rel="noopener">Does daylight saving time affect our health?</a> — Science magazine <span class="ref-tag ref-con">con</span></li>
-            <li><a href="https://currentbiology.com/article/S0960-9822(19)31293-7/fulltext" target="_blank" rel="noopener">Humans in permanent summer time are late chronotypes</a> — Current Biology <span class="ref-tag ref-pro">pro</span></li>
+            <li id="ref-sleep"><a href="https://pubmed.ncbi.nlm.nih.gov/25979095/" target="_blank" rel="noopener">Adverse effects of daylight saving time on adolescents' sleep and vigilance</a> — Medina et al., Journal of Clinical Sleep Medicine, 2015.</li>
+            <li id="ref-crashes"><a href="https://pubmed.ncbi.nlm.nih.gov/32008905/" target="_blank" rel="noopener">A chronobiological evaluation of the acute effects of daylight saving time on traffic accident risk</a> — Fritz et al., Current Biology, 2020. Observational spring-transition findings, not all transitions.</li>
+            <li id="ref-heart"><a href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2838653" target="_blank" rel="noopener">Daylight saving time and acute myocardial infarction</a> — JAMA Network Open, 2025. A large study found no significant association.</li>
+            <li id="ref-aasm"><a href="https://pubmed.ncbi.nlm.nih.gov/37904574/" target="_blank" rel="noopener">Permanent standard time is the optimal choice for health and safety</a> — American Academy of Sleep Medicine position statement, 2024.</li>
+            <li id="ref-school-secondary"><a href="https://www.vsb.bc.ca/preparing-for-grade-8-what-to-know-during-the-grade-7-year" target="_blank" rel="noopener">Preparing for Grade 8: what to know during the Grade 7 year</a> — Vancouver School Board. Secondary guidance lists an 8:40 AM start.</li>
+            <li id="ref-school-elementary"><a href="https://www.vsb.bc.ca/david-oppenheimer/school-policies-and-procedures" target="_blank" rel="noopener">School policies and procedures</a> — David Oppenheimer Elementary. Its schedule lists a 9:00 AM start.</li>
           </ul>
         </div>
       </div>
@@ -1272,7 +1304,7 @@
   }
 
   .eyebrow {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -1327,7 +1359,7 @@
   }
 
   .selector label {
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     font-weight: 700;
@@ -1390,7 +1422,7 @@
     border-radius: 24px;
     padding: 4px;
     gap: 2px;
-    flex-shrink: 0;
+    flex-shrink: 1;
   }
 
   .mode-toggle button {
@@ -1404,7 +1436,7 @@
     background: transparent;
     color: var(--text-muted);
     letter-spacing: 0.3px;
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .mode-toggle button:hover:not(.active) {
@@ -1459,7 +1491,7 @@
   }
 
   .chart-subtitle {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
   }
 
@@ -1494,7 +1526,7 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    font-size: 11.5px;
+    font-size: 13px;
     color: var(--text-muted);
   }
 
@@ -1570,7 +1602,7 @@
   .stat-number.dst-grey { color: #8b949e; }
 
   .stat-label {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     line-height: 1.4;
   }
@@ -1663,7 +1695,7 @@
   }
 
   .sports-subtitle {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
     line-height: 1.55;
     margin-bottom: 12px;
@@ -1682,7 +1714,7 @@
   }
 
   .panel-mode-btn {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.2px;
     padding: 5px 12px;
@@ -1751,15 +1783,15 @@
   }
 
   .sport-context {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     font-style: italic;
     line-height: 1.4;
   }
 
   .sport-source {
-    font-size: 10px;
-    color: #6e7681;
+    font-size: 12px;
+    color: var(--text-muted);
     line-height: 1.4;
     padding-bottom: 4px;
     border-bottom: 1px solid #21262d;
@@ -1786,7 +1818,7 @@
   }
 
   .mode-pill {
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.8px;
     text-transform: uppercase;
@@ -1828,7 +1860,7 @@
   }
 
   .sport-takeaway {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     line-height: 1.5;
     font-style: italic;
@@ -1839,8 +1871,8 @@
 
   .sports-footnote {
     margin-top: 16px;
-    font-size: 10.5px;
-    color: #6e7681;
+    font-size: 13px;
+    color: var(--text-muted);
     line-height: 1.6;
     text-align: center;
   }
@@ -1877,7 +1909,7 @@
   }
 
   .context-mode-label {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     font-weight: 600;
   }
@@ -1896,7 +1928,7 @@
   .context-big-number.dst-grey { color: #8b949e; }
 
   .context-big-label {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     line-height: 1.4;
     font-weight: 600;
@@ -1917,8 +1949,8 @@
   .context-detail strong.dst-grey { color: #8b949e; }
 
   .context-insight {
-    font-size: 11.5px;
-    color: #6e7681;
+    font-size: 12px;
+    color: var(--text-muted);
     line-height: 1.55;
     font-style: italic;
     margin-top: 4px;
@@ -1972,8 +2004,8 @@
   }
 
   .nyse-season-sub {
-    font-size: 10px;
-    color: #6e7681;
+    font-size: 12px;
+    color: var(--text-muted);
   }
 
   .nyse-col {
@@ -2012,8 +2044,8 @@
   }
 
   .nyse-time-note {
-    font-size: 10px;
-    color: #6e7681;
+    font-size: 12px;
+    color: var(--text-muted);
     text-align: center;
     line-height: 1.3;
   }
@@ -2066,7 +2098,7 @@
   }
 
   .insight-label {
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     font-weight: 700;
@@ -2093,8 +2125,8 @@
     margin-top: 48px;
     padding-top: 24px;
     border-top: 1px solid #21262d;
-    color: #6e7681;
-    font-size: 11px;
+    color: var(--text-muted);
+    font-size: 12px;
     line-height: 1.7;
   }
 
@@ -2114,7 +2146,7 @@
   }
 
   .references-title {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 1.2px;
     text-transform: uppercase;
@@ -2135,11 +2167,11 @@
   }
 
   .references-col-label {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.8px;
     text-transform: uppercase;
-    color: #6e7681;
+    color: var(--text-muted);
     margin-bottom: 10px;
   }
 
@@ -2153,38 +2185,14 @@
   }
 
   .references-list li {
-    font-size: 12px;
-    color: #6e7681;
+    font-size: 13px;
+    color: var(--text-muted);
     line-height: 1.55;
   }
 
-  .ref-tag {
-    display: inline-block;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    padding: 1px 6px;
-    border-radius: 8px;
-    vertical-align: middle;
-    margin-left: 4px;
-  }
-
-  .ref-pro {
-    background: rgba(240, 198, 84, 0.12);
-    color: var(--accent-gold);
-    border: 1px solid rgba(240, 198, 84, 0.3);
-  }
-
-  .ref-con {
-    background: rgba(231, 111, 81, 0.12);
-    color: var(--accent-orange);
-    border: 1px solid rgba(231, 111, 81, 0.3);
-  }
-
   .footer-credit {
-    font-size: 11px;
-    color: #6e7681;
+    font-size: 13px;
+    color: var(--text-muted);
     line-height: 1.7;
   }
 
@@ -2214,7 +2222,7 @@
     .mode-toggle button {
       flex: 1;
       padding: 8px 10px;
-      font-size: 11px;
+      font-size: 12px;
     }
 
     .stat-item {
@@ -2244,32 +2252,32 @@
     filter: brightness(1.15);
   }
 
+  .about-project { margin-bottom: 24px; font-size: 14px; }
+  .about-project strong { color: var(--text-primary); }
+  .about-project p { margin-top: 8px; }
+  .sports-footnote a, .insight-text a { color: var(--accent-blue); text-decoration: underline; text-underline-offset: 3px; }
+  .references-list li { scroll-margin-top: 24px; }
+  .references-list li:target { outline: 2px solid var(--accent-gold); outline-offset: 6px; }
+  :global(button:focus-visible), :global(a:focus-visible), .mode-switchable:focus-visible { outline: 2px solid var(--accent-gold); outline-offset: 4px; }
+  .stepper button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .tour-launch { margin-top: 16px; color: var(--accent-gold); background: transparent; border: 1px solid #8b949e; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
+
   /* ─── Driver.js tour overrides ───────────────────────── */
-
-  :global(.driver-popover) {
-    background: #161b22 !important;
-    border: 1px solid #30363d !important;
-    color: #e6edf3 !important;
+  :global(.driver-popover.daylight-tour) {
+    background: #161b22; border: 1px solid #8b949e; color: #e6edf3;
+    width: min(360px, calc(100vw - 40px)); max-width: calc(100vw - 40px);
+    padding: 20px; font-family: 'DM Sans', sans-serif;
   }
-
-  :global(.driver-popover-title) {
-    color: #f5f0e8 !important;
-    font-family: 'Playfair Display', serif !important;
-  }
-
-  :global(.driver-popover-description) {
-    color: #8b949e !important;
-  }
-
-  :global(.driver-popover-next-btn) {
-    background: #f0c654 !important;
-    color: #0d1117 !important;
-    border: none !important;
-  }
-
-  :global(.driver-popover-prev-btn),
-  :global(.driver-popover-close-btn) {
-    color: #8b949e !important;
-    border-color: #30363d !important;
-  }
+  :global(.daylight-tour .driver-popover-title) { color: #f5f0e8; font-family: 'Playfair Display', serif; font-size: 22px; padding-right: 20px; }
+  :global(.daylight-tour .driver-popover-description) { color: #e6edf3; font-size: 15px; line-height: 1.6; }
+  :global(.daylight-tour .driver-popover-progress-text) { color: #c0c8d2; font-size: 13px; }
+  :global(.daylight-tour .driver-popover-footer) { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  :global(.daylight-tour .driver-popover-navigation-btns) { margin-left: auto; }
+  :global(.daylight-tour .driver-popover-footer button) { font: 600 14px 'DM Sans', sans-serif; text-shadow: none; border-radius: 6px; padding: 8px 10px; }
+  :global(.daylight-tour .driver-popover-next-btn) { background: #f0c654; color: #0d1117; border: 1px solid #f0c654; }
+  :global(.daylight-tour .driver-popover-prev-btn), :global(.daylight-tour .tour-skip) { color: #e6edf3; background: #161b22; border: 1px solid #8b949e; cursor: pointer; }
+  :global(.daylight-tour .driver-popover-footer button:hover), :global(.daylight-tour .driver-popover-footer button:focus) { background: #e6edf3; color: #0d1117; border-color: #e6edf3; }
+  :global(.daylight-tour .driver-popover-close-btn) { color: #e6edf3; width: 32px; height: 32px; font-size: 24px; }
+  :global(.daylight-tour .driver-popover-arrow-side-top) { border-bottom-color: #161b22; }
+  :global(.daylight-tour .driver-popover-arrow-side-bottom) { border-top-color: #161b22; }
 </style>

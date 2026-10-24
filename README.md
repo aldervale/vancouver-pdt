@@ -13,7 +13,7 @@ An interactive data visualization exploring what B.C.'s switch to permanent dayl
 B.C. made permanent PDT (UTC−7 year-round) official in March 2026, with the final clock change on March 8, 2026. This infographic lets you compare three scenarios side by side:
 
 - **Permanent PDT** — what B.C. is actually doing (UTC−7 all year)
-- **Old DST** — the clock-change system we just left (UTC−8 winter / UTC−7 summer)
+- **Old system (clock changes)** — the clock-change system we just left (UTC−8 winter / UTC−7 summer)
 - **Permanent PST** — the alternative that was never on the table (UTC−8 all year)
 
 Set your own wake and bedtime to see how much daylight falls inside your waking window across the whole year.
@@ -21,8 +21,8 @@ Set your own wake and bedtime to see how much daylight falls inside your waking 
 ### Interactive panels
 
 - 🏒 **I like sports** — game times for Canucks, Champions League, and NFL under each time system
-- 👧 **I have a kid** — dark morning school commutes by scenario
-- 💼 **I work a 9-to-5** — days per year you leave work in daylight
+- 👧 **I have a kid** — sunrise relative to an illustrative school-morning reference time
+- 💼 **I work a 9-to-5** — calendar dates with sunset after 5 PM
 - 📈 **I trade stocks** — NYSE open time on your Vancouver clock, winter vs. summer
 
 ---
@@ -44,12 +44,12 @@ Set your own wake and bedtime to see how much daylight falls inside your waking 
 ## Data & methodology
 
 - Sunrise/sunset times computed with SunCalc for Vancouver (49.28°N, 123.12°W), daily values for 2026
-- PDT = UTC−7 year-round; Old DST = UTC−8 Nov–Mar, UTC−7 Mar–Nov; PST = UTC−8 year-round
-- DST transitions: spring forward March 8 2026, fall back November 1 2026 (for the Old DST comparison)
+- PDT = UTC−7 year-round; Old system (clock changes) = UTC−8 Nov–Mar, UTC−7 Mar–Nov; PST = UTC−8 year-round
+- DST transitions: spring forward March 8 2026, fall back November 1 2026 (for the Old system (clock changes) comparison)
 - Sports times computed from UTC broadcast start times using verified winter offsets: EST = UTC−5, CET = UTC+1
 - NYSE: opens 9:30 AM ET (EST = UTC−5 winter, EDT = UTC−4 summer)
-- School dark mornings: sunrise after 8:30 AM (Vancouver secondary start time)
-- Work daylight: sunset after 5:00 PM
+- School morning comparison: calendar dates with sunrise after an illustrative 8:30 AM reference time; actual school start and travel times vary
+- Evening comparison: calendar dates with sunset after 5:00 PM; counts include weekends and holidays, not actual commutes
 
 ---
 
