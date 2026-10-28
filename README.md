@@ -1,6 +1,6 @@
-# Vancouver Permanent Daylight Time — Daylight Impact Infographic
+# Vancouver Pacific Time (PCT) — Daylight Impact Infographic
 
-An interactive data visualization exploring what B.C.'s switch to permanent daylight time (PDT) means for your daily life in Vancouver.
+An interactive comparison of Vancouver daylight under Pacific time (PCT, UTC−7 year-round), the old seasonal clock system and permanent standard time.
 
 **Live:** [vancouver-pdt.fly.dev](https://vancouver-pdt.fly.dev)
 
@@ -10,19 +10,21 @@ An interactive data visualization exploring what B.C.'s switch to permanent dayl
 
 ## What it shows
 
-B.C. made permanent PDT (UTC−7 year-round) official in March 2026, with the final clock change on March 8, 2026. This infographic lets you compare three scenarios side by side:
+Vancouver moved its clocks forward for the last time on March 8, 2026 and will not fall back on November 1. B.C. announced the Pacific time (PCT) abbreviation on September 17, 2026. Regional mountain-time arrangements differ; see the official guidance below. This infographic compares three full-year scenarios:
 
-- **Permanent PDT** — what B.C. is actually doing (UTC−7 all year)
-- **Old DST** — the clock-change system we just left (UTC−8 winter / UTC−7 summer)
-- **Permanent PST** — the alternative that was never on the table (UTC−8 all year)
+- **Pacific Time (PCT)** — fixed UTC−7 throughout the modeled year
+- **Old system (clock changes)** — the clock-change system we just left (UTC−8 winter / UTC−7 summer)
+- **Permanent PST** — fixed UTC−8 throughout the modeled year
+
+These full-year scenarios are comparisons, not Vancouver's actual January–December 2026 clock history: Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.
 
 Set your own wake and bedtime to see how much daylight falls inside your waking window across the whole year.
 
 ### Interactive panels
 
 - 🏒 **I like sports** — game times for Canucks, Champions League, and NFL under each time system
-- 👧 **I have a kid** — dark morning school commutes by scenario
-- 💼 **I work a 9-to-5** — days per year you leave work in daylight
+- 👧 **I have a kid** — sunrise relative to an illustrative school-morning reference time
+- 💼 **I work a 9-to-5** — calendar dates with sunset after 5 PM
 - 📈 **I trade stocks** — NYSE open time on your Vancouver clock, winter vs. summer
 
 ---
@@ -44,12 +46,12 @@ Set your own wake and bedtime to see how much daylight falls inside your waking 
 ## Data & methodology
 
 - Sunrise/sunset times computed with SunCalc for Vancouver (49.28°N, 123.12°W), daily values for 2026
-- PDT = UTC−7 year-round; Old DST = UTC−8 Nov–Mar, UTC−7 Mar–Nov; PST = UTC−8 year-round
-- DST transitions: spring forward March 8 2026, fall back November 1 2026 (for the Old DST comparison)
+- PCT = UTC−7 year-round; Old system (clock changes) = UTC−8 Nov–Mar, UTC−7 Mar–Nov; PST = UTC−8 year-round
+- DST transitions: spring forward March 8 2026, fall back November 1 2026 (for the Old system (clock changes) comparison)
 - Sports times computed from UTC broadcast start times using verified winter offsets: EST = UTC−5, CET = UTC+1
-- NYSE: opens 9:30 AM ET (EST = UTC−5 winter, EDT = UTC−4 summer)
-- School dark mornings: sunrise after 8:30 AM (Vancouver secondary start time)
-- Work daylight: sunset after 5:00 PM
+- NYSE: opens 9:30 AM ET (EST = UTC−5 winter, EDT = UTC−4 summer); comparisons assume current U.S. seasonal clock rules
+- School morning comparison: calendar dates with sunrise after an illustrative 8:30 AM reference time; actual school start and travel times vary
+- Evening comparison: calendar dates with sunset after 5:00 PM; counts include weekends and holidays, not actual commutes
 
 ---
 
@@ -73,17 +75,17 @@ npm run test:e2e     # end-to-end tests (Playwright)
 
 ## Deploy
 
-The app uses `@sveltejs/adapter-node`. It's deployed on Fly.io:
+The app uses `@sveltejs/adapter-node`. The repository's `fly.toml` targets production, not staging. Production deployment requires the owner's final review.
 
-```bash
-fly deploy
-```
-
-The `fly.toml` is included in the repo. You'll need a Fly.io account and `flyctl` installed.
+Staging uses a separate, authenticated Fly app with its own deployment configuration and gateway. Preserve that gateway and existing private assets when deploying a review build. Do not use the repository's default `fly deploy` command for staging.
 
 ---
 
 ## References
+
+- [Official Pacific Time (PCT) announcement](https://news.gov.bc.ca/releases/2026CITZ0009-001073) — Government of B.C., September 17, 2026
+- [Year-round time and regional guidance](https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time) — Government of B.C., September 17, 2026
+- [Current U.S. daylight saving time rules](https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst) — NIST
 
 - [Reactions mixed as B.C. ends time changes, adopts year-round daylight time](https://www.cbc.ca/news/canada/british-columbia/b-c-adopting-year-round-daylight-time-9.7111657) — CBC News, Mar 2026
 - [March 8 is the last time most British Columbians will change their clocks](https://www.cbc.ca/news/canada/british-columbia/bc-permanent-daylight-saving-time-pacific-time-zone-clocks-9.7116954) — CBC News, Mar 2026
