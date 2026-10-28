@@ -245,9 +245,17 @@ test.describe('Vancouver Pacific Time App', () => {
   });
 
   test('references and project attribution have usable source links', async ({ page }) => {
-    await expect(page.locator('.references-title')).toBeVisible();
+    const sources = page.locator('details.references-section');
+    const summary = sources.locator('summary');
+    await expect(summary).toBeVisible();
+    await expect(sources).not.toHaveAttribute('open');
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(sources).toHaveAttribute('open');
+    await page.keyboard.press('Tab');
+    await expect(sources.getByRole('link').first()).toBeFocused();
     const references = page.locator('.references-list').getByRole('link');
-    expect(await references.count()).toBeGreaterThan(0);
+    await expect(references).toHaveCount(18);
     for (const link of await references.all()) {
       await expect(link).toHaveAttribute('href', /^https:\/\//);
       await expect(link).toHaveAttribute('rel', /noopener/);
@@ -302,13 +310,19 @@ test.describe('Vancouver Pacific Time App', () => {
 
   test('health and school claims link to their matching references', async ({ page }) => {
     await page.getByRole('button', { name: 'Old system (clock changes)', exact: true }).click();
+    const sources = page.locator('details.references-section');
     const healthLinks = page.locator('.insight-card.con').getByRole('link');
     await expect(healthLinks).toHaveCount(4);
     for (const link of await healthLinks.all()) {
       const target = await link.getAttribute('href');
       expect(target).toMatch(/^#ref-/);
+      if (await sources.getAttribute('open') !== null) await sources.locator('summary').click();
+      await link.click();
+      await expect(sources).toHaveAttribute('open');
       const reference = page.locator(target!);
       await expect(reference).toHaveCount(1);
+      await expect(reference).toBeVisible();
+      await expect(reference).toBeInViewport();
       await expect(reference.getByRole('link')).toHaveAttribute('href', /^https:\/\//);
     }
     await page.getByRole('button', { name: /I have a kid/ }).click();
@@ -316,10 +330,33 @@ test.describe('Vancouver Pacific Time App', () => {
       const link = page.locator('#panel-school').getByRole('link', { name, exact: true });
       await expect(link).toHaveAttribute('href', /^#ref-school-/);
       const target = await link.getAttribute('href');
+      if (await sources.getAttribute('open') !== null) await sources.locator('summary').click();
+      await link.click();
+      await expect(sources).toHaveAttribute('open');
+      await expect(page.locator(target!)).toBeInViewport();
       await expect(page.locator(target!).getByRole('link')).toHaveAttribute('href', /^https:\/\/www\.vsb\.bc\.ca\//);
     }
     await expect(page.locator('.about-project')).toContainText('Created by Adam Stuckert');
     await expect(page.locator('.about-project time')).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  test('FAQ disclosures work by keyboard and direct source fragments reveal the destination', async ({ page }) => {
+    const questions = page.locator('.faq-section details');
+    await expect(questions).toHaveCount(3);
+    for (const question of await questions.all()) {
+      const summary = question.locator('summary');
+      await expect(question).not.toHaveAttribute('open');
+      await summary.focus();
+      await page.keyboard.press('Enter');
+      await expect(question.locator('p')).toBeVisible();
+      await page.keyboard.press('Space');
+      await expect(question).not.toHaveAttribute('open');
+      await expect(summary).toBeFocused();
+    }
+    await page.goto('/#ref-heart');
+    await expect(page.locator('details.references-section')).toHaveAttribute('open');
+    await expect(page.locator('#ref-heart')).toBeVisible();
+    await expect(page.locator('#ref-heart')).toBeInViewport();
   });
 
   test('the existing Open Graph and Twitter preview remain available', async ({ page, request }) => {

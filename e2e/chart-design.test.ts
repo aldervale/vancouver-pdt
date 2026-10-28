@@ -26,11 +26,15 @@ for (const width of [320, 390, 1280]) {
       expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
       expect(await region.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }
+    const pctDetails = await page.getByRole('tooltip').textContent();
     await page.getByRole('button', { name: 'Old system (clock changes)', exact: true }).click();
     await expect(page.getByLabel('Chart key dates')).toContainText('Mar 8 · Spring forward');
     await expect(page.getByLabel('Chart key dates')).toContainText('Nov 1 · Fall back');
     await page.getByRole('button', { name: 'Permanent PST', exact: true }).click();
     await expect(page.getByLabel('Chart key dates')).toContainText('Dec 21 · Winter solstice');
+    await expect(page.getByRole('tooltip')).not.toHaveText(pctDetails!);
+    await canvas.dispatchEvent('pointermove', { clientX: box!.x + 94, clientY: box!.y + 100 });
+    await expect(page.getByRole('tooltip')).toContainText('January 1');
     await page.locator('.chart-wrapper').screenshot({ path: `test-results/chart-${width}.png` });
   });
 }

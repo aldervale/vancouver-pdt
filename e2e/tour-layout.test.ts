@@ -1,5 +1,20 @@
 import { test, expect } from '@playwright/test';
 
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  await page.screenshot({ path: testInfo.outputPath('tour-failure.png'), fullPage: false });
+  const layout = await page.evaluate(() => {
+    const describe = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const style = getComputedStyle(element);
+      return { bounds: element.getBoundingClientRect().toJSON(), transform: style.transform, left: style.left, top: style.top, bottom: style.bottom };
+    };
+    return { viewport: { width: innerWidth, height: innerHeight }, target: describe('.driver-active-element'), popover: describe('.driver-popover') };
+  });
+  await testInfo.attach('tour-layout', { body: JSON.stringify(layout, null, 2), contentType: 'application/json' });
+});
+
 for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   test(`tour keeps every target unobstructed at ${viewport.width}×${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);

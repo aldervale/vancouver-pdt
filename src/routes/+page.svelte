@@ -529,7 +529,8 @@
     ctx.font = '600 12px "DM Sans"';
     ctx.textAlign = 'center';
     MONTH_START_DOY.forEach((doy, i) => {
-      if (chartW < 400 && i % 2 !== 0) return;
+      const monthStep = chartW < 220 ? 3 : chartW < 400 ? 2 : 1;
+      if (i % monthStep !== 0) return;
       ctx.fillText(MONTH_NAMES[i], xPosDoy(doy), padTop + chartH + 24);
     });
 
@@ -1539,7 +1540,7 @@
     cursor: crosshair;
   }
 
-  .key-dates { display: flex; flex-wrap: wrap; gap: 6px 28px; padding-left: 22px; margin: 0 0 12px; color: #c9d1d9; font-size: 13px; }
+  .key-dates { list-style: decimal; display: flex; flex-wrap: wrap; gap: 6px 28px; padding-left: 22px; margin: 0 0 12px; color: #c9d1d9; font-size: 13px; }
   .key-dates li::marker { font-weight: 700; }
   .date-inspector { margin-top: 12px; font-size: 13px; }
   .date-inspector label { display: block; font-weight: 600; }
@@ -2305,7 +2306,8 @@
     padding: 20px; font-family: 'DM Sans', sans-serif;
     /* A stable dock avoids Driver's overlapping fallback when neither side fits. */
     position: fixed !important; top: auto !important; bottom: 16px !important;
-    left: 50% !important; right: auto !important; transform: translateX(-50%);
+    /* Driver writes translateY inline for bottom-side arrows; keep our X centering. */
+    left: 50% !important; right: auto !important; transform: translateX(-50%) !important;
     max-height: calc(100dvh - 32px); overflow-y: auto;
   }
   :global(.daylight-tour .driver-popover-arrow) { display: none; }
