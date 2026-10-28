@@ -184,7 +184,7 @@ describe('References and footer', () => {
     const { container } = render(Page);
     const title = container.querySelector('.references-title');
     expect(title).toBeTruthy();
-    expect(title!.textContent).toContain('References');
+    expect(title!.textContent).toContain('Sources');
   });
 
   it('renders reference links', () => {
