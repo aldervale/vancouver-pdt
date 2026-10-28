@@ -33,8 +33,30 @@ for (const width of [320, 390, 1280]) {
     await page.getByRole('button', { name: 'Permanent PST', exact: true }).click();
     await expect(page.getByLabel('Chart key dates')).toContainText('Dec 21 · Winter solstice');
     await expect(page.getByRole('tooltip')).not.toHaveText(pctDetails!);
-    await canvas.dispatchEvent('pointermove', { clientX: box!.x + 94, clientY: box!.y + 100 });
+    await slider.focus();
+    await slider.press('Home');
     await expect(page.getByRole('tooltip')).toContainText('January 1');
+    await canvas.hover({ position: { x: 94 + (box!.width - 114) / 2, y: 100 } });
+    await expect(page.getByRole('tooltip')).toContainText('July 2');
     await page.locator('.chart-wrapper').screenshot({ path: `test-results/chart-${width}.png` });
+    await page.getByRole('button', { name: 'Pacific Time (PCT)', exact: true }).click();
+    await page.locator('.chart-wrapper').screenshot({ path: `test-results/chart-pct-${width}.png` });
+    await page.locator('.scenario-comparison').screenshot({ path: `test-results/comparison-${width}.png` });
   });
 }
+
+ test('Sources and FAQ remain usable without JavaScript', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto('http://127.0.0.1:4173/');
+  const sources = page.locator('details.references-section');
+  await expect(sources.locator('a')).toHaveCount(18);
+  await sources.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(sources.getByRole('link').first()).toBeVisible();
+  const question = page.locator('.faq-section details').first();
+  await question.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(question.locator('p')).toBeVisible();
+  await context.close();
+});
