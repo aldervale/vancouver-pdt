@@ -256,6 +256,48 @@ test.describe('Vancouver Pacific Time App', () => {
     const footer = page.locator('footer');
     await expect(footer.getByRole('link', { name: 'SunCalc', exact: true })).toHaveAttribute('href', 'https://github.com/mourner/suncalc');
     await expect(footer.getByRole('link', { name: 'Source code & feedback', exact: true })).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Data & methodology', exact: true })).toHaveAttribute(
+      'href', 'https://github.com/aldervale/vancouver-pdt/blob/c95707ca05e70df11800536572a05a76d77577a3/README.md#data--methodology'
+    );
+  });
+
+  test('scenario groups and cards have explicit names and meaningful descriptions in the accessibility tree', async ({ page }) => {
+    await expect(page.getByRole('group', { name: 'Compare time systems', exact: true })).toBeVisible();
+    for (const [persona, name] of [
+      ['I like sports', 'Compare time systems for game times'],
+      ['I trade stocks', 'Compare time systems for market opening'],
+    ]) {
+      await page.getByRole('button', { name: new RegExp(persona) }).click();
+      const group = page.getByRole('group', { name, exact: true });
+      await expect(group).toBeVisible();
+      expect(await group.ariaSnapshot()).toContain(`group "${name}"`);
+      for (const name of ['Pacific Time (PCT)', 'Old system', 'Permanent PST']) {
+        const control = group.getByRole('button', { name, exact: true });
+        await expect(control).toHaveAccessibleName(name);
+        await control.focus();
+        await page.keyboard.press('Space');
+        await expect(control).toHaveAttribute('aria-pressed', 'true');
+      }
+    }
+    for (const [persona, metric] of [
+      ['I have a kid', 'calendar days with sunrise after 8:30 AM'],
+      ['I work a 9-to-5', 'calendar days with sunset after 5 PM'],
+    ]) {
+      const toggle = page.getByRole('button', { name: new RegExp(persona) });
+      await toggle.click();
+      const panel = await controlledPanel(page, toggle);
+      for (const name of ['Pacific Time (PCT) (UTC−7)', 'Old system (UTC−8 winter)', 'Permanent PST (UTC−8)']) {
+        const card = panel.getByRole('button', { name, exact: true });
+        await expect(card).toHaveAccessibleName(name);
+        await expect(card).toHaveAccessibleDescription(new RegExp(`^\\d+ ${metric.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+        expect(await card.ariaSnapshot()).toContain(`button "${name}"`);
+        await card.focus();
+        await page.keyboard.press('Enter');
+        await expect(card).toHaveAttribute('aria-pressed', 'true');
+        await page.keyboard.press('Space');
+        await expect(card).toHaveAttribute('aria-pressed', 'true');
+      }
+    }
   });
 
   test('health and school claims link to their matching references', async ({ page }) => {
@@ -357,6 +399,68 @@ test('the chart paints and remains reactive while fonts never finish loading', a
 });
 
 test.describe('Guided tour', () => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    test(`Tab and Shift+Tab stay inside every tour step at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      for (const title of ['Your schedule', 'Three scenarios', 'Your daylight', 'Your daily life']) {
+        const dialog = page.getByRole('dialog', { name: title, exact: true });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toHaveAttribute('aria-modal', 'true');
+        const close = dialog.getByRole('button', { name: 'Close tour', exact: true });
+        const skip = dialog.getByRole('button', { name: 'Skip tour', exact: true });
+        const back = dialog.getByRole('button', { name: 'Back', exact: true });
+        const next = dialog.locator('.driver-popover-next-btn');
+        const controls = title === 'Your schedule' ? [close, skip, next] : [close, skip, back, next];
+        await expect(close).toBeFocused();
+        // Multiple complete cycles catch Driver's own handler accidentally advancing twice.
+        for (let cycle = 0; cycle < 2; cycle++) {
+          for (const control of [...controls.slice(1), close]) {
+            await page.keyboard.press('Tab');
+            await expect(control).toBeFocused();
+          }
+          for (const control of [...controls.slice(1).reverse(), close]) {
+            await page.keyboard.press('Shift+Tab');
+            await expect(control).toBeFocused();
+          }
+        }
+        // Programmatic focus cannot escape to highlighted or unrelated page controls either.
+        await page.getByRole('button', { name: 'Earlier wake time', exact: true }).focus();
+        await expect(close).toBeFocused();
+        await next.click();
+      }
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      const wake = page.getByRole('button', { name: 'Earlier wake time', exact: true });
+      await wake.focus();
+      await expect(wake).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(page.getByLabel('Wake up', { exact: true })).toBeFocused();
+    });
+  }
+
+  test('every dismissal releases the focus trap and repeated replays restore launcher focus', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('vdt_tour_done', '1'));
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const replay = page.getByRole('button', { name: 'Take a quick tour', exact: true });
+    for (const dismissal of ['Close tour', 'Skip tour', 'Escape', 'Done']) {
+      await replay.click();
+      await expect(page.getByRole('dialog', { name: 'Your schedule', exact: true })).toBeVisible();
+      if (dismissal === 'Escape') {
+        await pressTourKey(page, 'Escape');
+      } else if (dismissal === 'Done') {
+        for (let step = 0; step < 3; step++) await page.getByRole('button', { name: 'Next', exact: true }).click();
+        await page.getByRole('button', { name: 'Done', exact: true }).click();
+      } else {
+        await page.getByRole('button', { name: dismissal, exact: true }).click();
+      }
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(replay).toBeFocused();
+      const wake = page.getByRole('button', { name: 'Earlier wake time', exact: true });
+      await wake.focus();
+      await expect(wake).toBeFocused();
+    }
+  });
+
   test('first visit is skippable, keeps the legacy dismissal key, and can be replayed', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.driver-popover')).toBeVisible();

@@ -205,17 +205,49 @@ describe('References and footer', () => {
 
 
 describe('Accessible controls and disclosure panels', () => {
+  it('names the sports and market scenario toggle groups for their context', async () => {
+    render(Page);
+    expect(screen.getByRole('group', { name: 'Compare time systems' })).toBeInTheDocument();
+    for (const [persona, group] of [
+      ['I like sports', 'Compare time systems for game times'],
+      ['I trade stocks', 'Compare time systems for market opening'],
+    ]) {
+      await fireEvent.click(screen.getByRole('button', { name: new RegExp(persona) }));
+      expect(screen.getByRole('group', { name: group })).toHaveAccessibleName(group);
+    }
+  });
+
+  it.each(['I have a kid', 'I work a 9-to-5'])('%s gives each scenario card a concise name and metric description', async persona => {
+    const { container } = render(Page);
+    const toggle = screen.getByRole('button', { name: new RegExp(persona) });
+    await fireEvent.click(toggle);
+    const panel = container.querySelector(`[id="${toggle.getAttribute('aria-controls')}"]`)!;
+    const cards = Array.from(panel.querySelectorAll('.mode-switchable'));
+    const names = ['Pacific Time (PCT) (UTC−7)', 'Old system (UTC−8 winter)', 'Permanent PST (UTC−8)'];
+    expect(cards).toHaveLength(3);
+    for (const [index, card] of cards.entries()) {
+      expect(card).toHaveAccessibleName(names[index]);
+      const count = card.querySelector('.context-big-number')!.textContent;
+      const metric = card.querySelector('.context-big-label')!.textContent;
+      expect(card).toHaveAccessibleDescription(`${count} ${metric}`);
+      await fireEvent.keyDown(card, { key: 'Enter' });
+      expect(card).toHaveAttribute('aria-pressed', 'true');
+      await fireEvent.keyDown(card, { key: ' ' });
+      expect(card).toHaveAttribute('aria-pressed', 'true');
+    }
+  });
+
   it('preserves the four distinct stepper button names and actions', async () => {
     render(Page);
     const wake = screen.getByLabelText('Wake up') as HTMLInputElement;
     const sleep = screen.getByLabelText('Bedtime') as HTMLInputElement;
-    await fireEvent.click(screen.getByRole('button', { name: 'Later wake time', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Later wake time' }));
     expect(wake.value).toBe('8');
-    await fireEvent.click(screen.getByRole('button', { name: 'Earlier wake time', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Earlier wake time' }));
     expect(wake.value).toBe('7');
-    await fireEvent.click(screen.getByRole('button', { name: 'Earlier bedtime', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Earlier bedtime' }));
     expect(sleep.value).toBe('22');
-    await fireEvent.click(screen.getByRole('button', { name: 'Later bedtime', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Later bedtime' }));
     expect(sleep.value).toBe('23');
   });
 
@@ -270,7 +302,7 @@ describe('Honest comparison labels', () => {
 
   it('uses Old system consistently outside the descriptive main toggle', async () => {
     const { container } = render(Page);
-    await fireEvent.click(screen.getByRole('button', { name: 'Old system (clock changes)', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Old system (clock changes)' }));
     expect(container.querySelector('.chart-subtitle')).toHaveTextContent('Old system');
     expect(container.querySelector('.stat-label')).toHaveTextContent(/old system/i);
     expect(container).not.toHaveTextContent(/old DST/i);
@@ -298,6 +330,9 @@ describe('Honest comparison labels', () => {
     const project = footer.querySelector('a[href*="github.com/"][href$="/vancouver-pdt"]');
     expect(project).toBeInTheDocument();
     expect(project?.textContent?.trim()).toBeTruthy();
+    const methodology = screen.getByRole('link', { name: 'Data & methodology' });
+    expect(methodology).toHaveAttribute('href', 'https://github.com/aldervale/vancouver-pdt/blob/c95707ca05e70df11800536572a05a76d77577a3/README.md#data--methodology');
+    expect(methodology).toHaveAttribute('rel', 'noopener');
   });
 });
 
@@ -325,7 +360,7 @@ describe('Current Pacific Time policy and model scope', () => {
       ['current U.S. clock rules', 'https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst'],
     ];
     for (const [name, href] of sources) {
-      const link = screen.getByRole('link', { name, exact: true });
+      const link = screen.getByRole('link', { name });
       expect(policy.contains(link)).toBe(true);
       expect(link).toHaveAttribute('href', href);
       expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
@@ -353,7 +388,7 @@ describe('Current Pacific Time policy and model scope', () => {
       ['Old system (clock changes)', 'old system'],
       ['Permanent PST', 'permanent PST'],
     ]) {
-      await fireEvent.click(screen.getByRole('button', { name, exact: true }));
+      await fireEvent.click(screen.getByRole('button', { name }));
       expect(chart).toHaveAccessibleName(`Vancouver sunrise and sunset comparison under ${label}; summary values below`);
     }
   });
@@ -400,19 +435,20 @@ describe('Guided tour lifecycle', () => {
     render(Page);
     await act(() => vi.advanceTimersByTimeAsync(1000));
     expect(mockDriver.create).not.toHaveBeenCalled();
-    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour' }));
     expect(mockDriver.instance.drive).toHaveBeenCalledTimes(1);
   });
 
   it('renders an explicit Skip tour control that destroys the active tour', async () => {
     render(Page);
-    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour' }));
     const config = latestTourConfig();
+    const wrapper = document.createElement('div');
     const footer = document.createElement('div');
     const closeButton = document.createElement('button');
     const previousButton = document.createElement('button');
     const activeTour = { ...mockDriver.instance, isFirstStep: () => true } as unknown as Driver;
-    config.onPopoverRender?.({ footer, closeButton, previousButton } as PopoverDOM, {
+    config.onPopoverRender?.({ wrapper, footer, closeButton, previousButton } as unknown as PopoverDOM, {
       config, state: {}, driver: activeTour,
     });
     const skip = footer.querySelector('button')!;
@@ -427,7 +463,7 @@ describe('Guided tour lifecycle', () => {
   it('manual replay cancels the pending automatic start and does not duplicate an active tour', async () => {
     vi.mocked(localStorage.getItem).mockReturnValue(null);
     render(Page);
-    const replay = screen.getByRole('button', { name: 'Take a quick tour', exact: true });
+    const replay = screen.getByRole('button', { name: 'Take a quick tour' });
     await fireEvent.click(replay);
     mockDriver.instance.isActive.mockReturnValue(true);
     await fireEvent.click(replay);
@@ -439,13 +475,13 @@ describe('Guided tour lifecycle', () => {
   it('respects reduced-motion preferences when starting the tour', async () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
     render(Page);
-    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour' }));
     expect(latestTourConfig().animate).toBe(false);
   });
 
   it('stores dismissal with the existing key', async () => {
     render(Page);
-    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour' }));
     simulateTourDestroyed();
     expect(localStorage.setItem).toHaveBeenCalledWith('vdt_tour_done', '1');
   });
@@ -456,10 +492,10 @@ describe('Guided tour lifecycle', () => {
     expect(() => render(Page)).not.toThrow();
     await act(() => vi.advanceTimersByTimeAsync(1000));
     expect(mockDriver.create).not.toHaveBeenCalled();
-    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour' }));
     expect(mockDriver.instance.drive).toHaveBeenCalled();
     expect(() => simulateTourDestroyed()).not.toThrow();
-    await fireEvent.click(screen.getByRole('button', { name: 'Later wake time', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Later wake time' }));
     expect(screen.getByLabelText('Wake up')).toHaveValue('8');
   });
 
@@ -472,7 +508,7 @@ describe('Guided tour lifecycle', () => {
     try {
       expect(() => render(Page)).not.toThrow();
       await act(() => vi.advanceTimersByTimeAsync(1000));
-      await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+      await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour' }));
       expect(mockDriver.instance.drive).toHaveBeenCalled();
       expect(() => simulateTourDestroyed()).not.toThrow();
     } finally {
@@ -492,7 +528,7 @@ describe('Guided tour lifecycle', () => {
     const addListener = vi.spyOn(window, 'addEventListener');
     const removeListener = vi.spyOn(window, 'removeEventListener');
     const { unmount } = render(Page);
-    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Take a quick tour' }));
     mockDriver.instance.isActive.mockReturnValue(true);
     const resizeListener = addListener.mock.calls.find(([type]) => type === 'resize')?.[1];
     expect(resizeListener).toBeDefined();
@@ -508,7 +544,7 @@ describe('Guided tour lifecycle', () => {
 describe('Evidence and chart readability', () => {
   it('links each health claim to an identifiable source and keeps the claim qualified', async () => {
     const { container } = render(Page);
-    await fireEvent.click(screen.getByRole('button', { name: 'Old system (clock changes)', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Old system (clock changes)' }));
     const insight = container.querySelector('.insight-card.con')!;
     expect(insight).toHaveTextContent(/observational studies/i);
     expect(insight).toHaveTextContent(/Heart-attack findings vary/i);
@@ -544,7 +580,7 @@ describe('Evidence and chart readability', () => {
       await act();
       drawnText.length = 0;
       // Resizing invokes the same chart drawing path in every mode.
-      await fireEvent.click(screen.getByRole('button', { name, exact: true }));
+      await fireEvent.click(screen.getByRole('button', { name }));
       await fireEvent(window, new Event('resize'));
       expect(drawnText.length).toBeGreaterThan(20);
       for (const label of drawnText) {

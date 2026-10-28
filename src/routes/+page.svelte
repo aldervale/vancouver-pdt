@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import SunCalc from 'suncalc';
   import { driver } from 'driver.js';
+  import { trapTourFocus } from '$lib/tour-focus';
   import 'driver.js/dist/driver.css';
 
   let canvas: HTMLCanvasElement;
@@ -716,6 +717,7 @@
 
   let tour: ReturnType<typeof driver> | undefined;
   let tourTimer: ReturnType<typeof setTimeout> | undefined;
+  let releaseTourFocus: (() => void) | undefined;
 
   function rememberTourDismissal() {
     try { localStorage.setItem('vdt_tour_done', '1'); } catch { /* Storage may be blocked. */ }
@@ -725,10 +727,18 @@
     clearTimeout(tourTimer);
     if (tour?.isActive()) return;
     const previousFocus = document.activeElement as HTMLElement | null;
+    const finishTour = () => {
+      releaseTourFocus?.();
+      releaseTourFocus = undefined;
+      rememberTourDismissal();
+      // Driver restores its own last-step focus after its callbacks.
+      queueMicrotask(() => { if (previousFocus?.isConnected) previousFocus.focus(); });
+    };
     tour = driver({
       showProgress: true,
       // Immediate steps keep keyboard navigation and early dismissal reliable.
       animate: false,
+      disableActiveInteraction: true,
       overlayOpacity: 0,
       stagePadding: 0,
       popoverClass: 'daylight-tour',
@@ -736,14 +746,12 @@
       prevBtnText: 'Back',
       doneBtnText: 'Done',
       onDestroyStarted: (_element, _step, { driver: activeTour }) => {
-        rememberTourDismissal();
+        // An immediate dismissal can precede Driver's first animation frame,
+        // in which case Driver does not call onDestroyed. Clean up first.
+        finishTour();
         activeTour.destroy();
       },
-      onDestroyed: () => {
-        rememberTourDismissal();
-        // Driver restores its own last-step focus after this callback.
-        queueMicrotask(() => { if (previousFocus?.isConnected) previousFocus.focus(); });
-      },
+      onDestroyed: finishTour,
       onPopoverRender: (popover, { driver: activeTour }) => {
         popover.closeButton.setAttribute('aria-label', 'Close tour');
         popover.previousButton.hidden = activeTour.isFirstStep();
@@ -752,8 +760,12 @@
         skip.type = 'button';
         skip.className = 'tour-skip';
         skip.textContent = 'Skip tour';
-        skip.addEventListener('click', () => { rememberTourDismissal(); activeTour.destroy(); });
+        skip.addEventListener('click', () => { finishTour(); activeTour.destroy(); });
         popover.footer.prepend(skip);
+        // Each step replaces its popover. Release the old listeners before
+        // installing the new trap, and always release it before restoring focus.
+        releaseTourFocus?.();
+        releaseTourFocus = trapTourFocus(popover.wrapper);
       },
       steps: [
         { element: '.selector-row', popover: { title: 'Your schedule', description: 'Set your typical wake-up and bedtime to see how daylight fits your day.', side: 'bottom', align: 'start' } },
@@ -785,6 +797,8 @@
       disposed = true;
       clearTimeout(tourTimer);
       tour?.destroy();
+      releaseTourFocus?.();
+      releaseTourFocus = undefined;
       window.removeEventListener('resize', handleResize);
       document.fonts?.removeEventListener?.('loadingdone', handleFontsLoaded);
     };
@@ -999,7 +1013,7 @@
         <div class="sports-subtitle">
           How the time system affects when you watch sports — using real winter UTC offsets.
         </div>
-        <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
+        <div class="panel-mode-toggle" role="group" aria-label="Compare time systems for game times">
           <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Pacific Time (PCT)</button>
           <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system</button>
           <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
@@ -1055,13 +1069,13 @@
       </div>
 
       <div class="context-cards">
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" aria-labelledby="school-pdt-label" aria-describedby="school-pdt-count school-pdt-metric" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PCT</span>
-            <span class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
+            <span id="school-pdt-label" class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
           </div>
-          <div class="context-big-number orange">{schoolDarkDays.pdt}</div>
-          <div class="context-big-label">calendar days with sunrise after 8:30 AM</div>
+          <div id="school-pdt-count" class="context-big-number orange">{schoolDarkDays.pdt}</div>
+          <div id="school-pdt-metric" class="context-big-label">calendar days with sunrise after 8:30 AM</div>
           <div class="context-detail">
             Worst day: <strong>{MONTH_NAMES[worstSunrisePDT.date.getMonth()]} {worstSunrisePDT.date.getDate()}</strong>
             — sunrise at <strong class="orange">{fmtTime(worstSunrisePDT.sunrise)}</strong>
@@ -1069,13 +1083,13 @@
           <div class="context-insight">Sun rises after 8:30 AM for ~{Math.round(schoolDarkDays.pdt / 30.4)} months. The 1-hour shift from PST means more mornings before sunrise at this reference time.</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} role="button" tabindex="0" aria-pressed={mode === 'dst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'dst'; } }} onclick={() => mode = 'dst'} title="Switch to Old system">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} role="button" aria-labelledby="school-dst-label" aria-describedby="school-dst-count school-dst-metric" tabindex="0" aria-pressed={mode === 'dst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'dst'; } }} onclick={() => mode = 'dst'} title="Switch to Old system">
           <div class="context-card-header">
             <span class="mode-pill dst-pill">Seasonal</span>
-            <span class="context-mode-label">Old system (UTC−8 winter)</span>
+            <span id="school-dst-label" class="context-mode-label">Old system (UTC−8 winter)</span>
           </div>
-          <div class="context-big-number dst-grey">{schoolDarkDays.dst}</div>
-          <div class="context-big-label">calendar days with sunrise after 8:30 AM</div>
+          <div id="school-dst-count" class="context-big-number dst-grey">{schoolDarkDays.dst}</div>
+          <div id="school-dst-metric" class="context-big-label">calendar days with sunrise after 8:30 AM</div>
           <div class="context-detail">
             Worst day: <strong>{MONTH_NAMES[worstSunriseDST.date.getMonth()]} {worstSunriseDST.date.getDate()}</strong>
             — sunrise at <strong class="dst-grey">{fmtTime(worstSunriseDST.sunrise)}</strong>
@@ -1083,13 +1097,13 @@
           <div class="context-insight">The seasonal system moved winter sunrise an hour earlier than Pacific Time (PCT).</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} role="button" tabindex="0" aria-pressed={mode === 'pst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pst'; } }} onclick={() => mode = 'pst'} title="Switch to PST">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} role="button" aria-labelledby="school-pst-label" aria-describedby="school-pst-count school-pst-metric" tabindex="0" aria-pressed={mode === 'pst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pst'; } }} onclick={() => mode = 'pst'} title="Switch to PST">
           <div class="context-card-header">
             <span class="mode-pill pst-pill">PST</span>
-            <span class="context-mode-label">Permanent PST (UTC−8)</span>
+            <span id="school-pst-label" class="context-mode-label">Permanent PST (UTC−8)</span>
           </div>
-          <div class="context-big-number blue">{schoolDarkDays.pst}</div>
-          <div class="context-big-label">calendar days with sunrise after 8:30 AM</div>
+          <div id="school-pst-count" class="context-big-number blue">{schoolDarkDays.pst}</div>
+          <div id="school-pst-metric" class="context-big-label">calendar days with sunrise after 8:30 AM</div>
           <div class="context-detail">
             Worst day: <strong>{MONTH_NAMES[worstSunrisePST.date.getMonth()]} {worstSunrisePST.date.getDate()}</strong>
             — sunrise at <strong class="blue">{fmtTime(worstSunrisePST.sunrise)}</strong>
@@ -1118,13 +1132,13 @@
       </div>
 
       <div class="context-cards">
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" aria-labelledby="work-pdt-label" aria-describedby="work-pdt-count work-pdt-metric" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PCT</span>
-            <span class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
+            <span id="work-pdt-label" class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
           </div>
-          <div class="context-big-number gold">{workDaylightDays.pdt}</div>
-          <div class="context-big-label">calendar days with sunset after 5 PM</div>
+          <div id="work-pdt-count" class="context-big-number gold">{workDaylightDays.pdt}</div>
+          <div id="work-pdt-metric" class="context-big-label">calendar days with sunset after 5 PM</div>
           <div class="context-detail">
             {365 - workDaylightDays.pdt} calendar days with sunset at or before 5 PM
           </div>
@@ -1138,13 +1152,13 @@
           <div class="context-insight">Pacific Time (PCT)'s main benefit — evening daylight is shifted 1 hour later all year.</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} role="button" tabindex="0" aria-pressed={mode === 'dst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'dst'; } }} onclick={() => mode = 'dst'} title="Switch to Old system">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'dst'} role="button" aria-labelledby="work-dst-label" aria-describedby="work-dst-count work-dst-metric" tabindex="0" aria-pressed={mode === 'dst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'dst'; } }} onclick={() => mode = 'dst'} title="Switch to Old system">
           <div class="context-card-header">
             <span class="mode-pill dst-pill">Seasonal</span>
-            <span class="context-mode-label">Old system (UTC−8 winter)</span>
+            <span id="work-dst-label" class="context-mode-label">Old system (UTC−8 winter)</span>
           </div>
-          <div class="context-big-number dst-grey">{workDaylightDays.dst}</div>
-          <div class="context-big-label">calendar days with sunset after 5 PM</div>
+          <div id="work-dst-count" class="context-big-number dst-grey">{workDaylightDays.dst}</div>
+          <div id="work-dst-metric" class="context-big-label">calendar days with sunset after 5 PM</div>
           <div class="context-detail">
             {365 - workDaylightDays.dst} calendar days with sunset at or before 5 PM
           </div>
@@ -1158,13 +1172,13 @@
           <div class="context-insight">Old system gave you evening daylight in summer but short winter days at 5 PM.</div>
         </div>
 
-        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} role="button" tabindex="0" aria-pressed={mode === 'pst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pst'; } }} onclick={() => mode = 'pst'} title="Switch to PST">
+        <div class="context-card mode-switchable" class:context-card-active={mode === 'pst'} role="button" aria-labelledby="work-pst-label" aria-describedby="work-pst-count work-pst-metric" tabindex="0" aria-pressed={mode === 'pst'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pst'; } }} onclick={() => mode = 'pst'} title="Switch to PST">
           <div class="context-card-header">
             <span class="mode-pill pst-pill">PST</span>
-            <span class="context-mode-label">Permanent PST (UTC−8)</span>
+            <span id="work-pst-label" class="context-mode-label">Permanent PST (UTC−8)</span>
           </div>
-          <div class="context-big-number blue">{workDaylightDays.pst}</div>
-          <div class="context-big-label">calendar days with sunset after 5 PM</div>
+          <div id="work-pst-count" class="context-big-number blue">{workDaylightDays.pst}</div>
+          <div id="work-pst-metric" class="context-big-label">calendar days with sunset after 5 PM</div>
           <div class="context-detail">
             {365 - workDaylightDays.pst} calendar days with sunset at or before 5 PM
           </div>
@@ -1194,7 +1208,7 @@
           NYSE opens at 9:30 AM ET (EST UTC−5 in winter, EDT UTC−4 in summer).
           What time does the bell ring on your clock in Vancouver?
         </div>
-        <div class="panel-mode-toggle" role="group" aria-label="Compare time systems">
+        <div class="panel-mode-toggle" role="group" aria-label="Compare time systems for market opening">
           <button class="panel-mode-btn" class:active={mode === 'pdt'} class:pdt={mode === 'pdt'} aria-pressed={mode === 'pdt'} onclick={() => mode = 'pdt'}>Pacific Time (PCT)</button>
           <button class="panel-mode-btn" class:active={mode === 'dst'} class:dst={mode === 'dst'} aria-pressed={mode === 'dst'} onclick={() => mode = 'dst'}>Old system</button>
           <button class="panel-mode-btn" class:active={mode === 'pst'} class:pst={mode === 'pst'} aria-pressed={mode === 'pst'} onclick={() => mode = 'pst'}>Permanent PST</button>
@@ -1269,8 +1283,8 @@
   <footer>
     <div class="about-project">
       <strong>About BC Daylight</strong>
-      <p>An independent, open-source comparison of Vancouver daylight under three clock systems. Created by Adam Stuckert. <a href="https://github.com/aldervale/vancouver-pdt" target="_blank" rel="noopener">Source code &amp; feedback</a>.</p>
-      <p>Model year: 2026 · Site update: <time datetime="2026-10-24">October 24, 2026</time>.</p>
+      <p>An independent, open-source comparison of Vancouver daylight under three clock systems. Created by Adam Stuckert. <a href="https://github.com/aldervale/vancouver-pdt" target="_blank" rel="noopener">Source code &amp; feedback</a> · <a href="https://github.com/aldervale/vancouver-pdt/blob/c95707ca05e70df11800536572a05a76d77577a3/README.md#data--methodology" target="_blank" rel="noopener">Data &amp; methodology</a>.</p>
+      <p>Model year: 2026 · Site update: <time datetime="2026-10-28">October 28, 2026</time>.</p>
     </div>
     <div class="references-section">
       <div class="references-title">References &amp; Further Reading</div>
