@@ -434,6 +434,8 @@ test.describe('Guided tour', () => {
       await wake.focus();
       await expect(wake).toBeFocused();
       await page.keyboard.press('Tab');
+      await expect(page.getByRole('button', { name: 'Later wake time', exact: true })).toBeFocused();
+      await page.keyboard.press('Tab');
       await expect(page.getByLabel('Wake up', { exact: true })).toBeFocused();
     });
   }
