@@ -51,6 +51,8 @@ describe('Design batch content', () => {
     });
     expect(container.querySelector('#comparison-note')).toHaveTextContent('not actual school days or commutes');
     expect(container.querySelector('.comparison-scroll')).toHaveAttribute('tabindex', '0');
+    expect(container.querySelector('.comparison-scroll')).toHaveAttribute('aria-describedby', 'comparison-note comparison-scroll-hint');
+    expect(container.querySelector('#comparison-scroll-hint')).toHaveTextContent('Swipe to compare all three systems');
   });
 
   it('keeps sources in the HTML, uses native disclosures, and opens references from in-page links', async () => {

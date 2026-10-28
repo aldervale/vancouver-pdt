@@ -912,9 +912,10 @@
   <section class="scenario-comparison" aria-labelledby="comparison-heading">
     <h2 id="comparison-heading">The scenarios at a glance</h2>
     <p id="comparison-note">Vancouver, 2026. Counts include weekends and holidays, not actual school days or commutes. Twilight is not modeled.</p>
+    <p id="comparison-scroll-hint" class="comparison-scroll-hint">↔ Swipe to compare all three systems, or focus the table and use the left and right arrow keys.</p>
     <!-- Keyboard focus lets users scroll the comparison horizontally on narrow screens. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <div class="comparison-scroll" tabindex="0" role="region" aria-label="Scenario comparison table" aria-describedby="comparison-note">
+    <div class="comparison-scroll" tabindex="0" role="region" aria-label="Scenario comparison table" aria-describedby="comparison-note comparison-scroll-hint">
       <table>
         <caption>Full-year modeled daylight by clock system</caption>
         <thead><tr><th scope="col">Measure</th><th scope="col">PCT</th><th scope="col">Old system</th><th scope="col">PST</th></tr></thead>
@@ -1291,6 +1292,8 @@
   .scenario-comparison { margin: 28px 0; }
   .scenario-comparison h2, .faq-section h2 { font-size: 18px; margin: 0 0 10px; color: var(--text-primary); }
   .scenario-comparison p { font-size: 13px; line-height: 1.6; color: var(--text-muted); margin: 0 0 14px; }
+  .scenario-comparison .comparison-scroll-hint { display: none; color: var(--accent-gold); }
+  @media (max-width: 520px) { .scenario-comparison .comparison-scroll-hint { display: block; } }
   .comparison-scroll { overflow-x: auto; border: 1px solid #30363d; border-radius: 10px; }
   .comparison-scroll table { width: 100%; min-width: 420px; border-collapse: collapse; font-size: 13px; }
   .comparison-scroll caption { text-align: left; padding: 12px; color: var(--text-muted); }

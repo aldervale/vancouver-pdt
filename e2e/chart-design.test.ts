@@ -42,6 +42,19 @@ for (const width of [320, 390, 1280]) {
     await page.getByRole('button', { name: 'Pacific Time (PCT)', exact: true }).click();
     await page.locator('.chart-wrapper').screenshot({ path: `test-results/chart-pct-${width}.png` });
     await page.locator('.scenario-comparison').screenshot({ path: `test-results/comparison-${width}.png` });
+    if (width < 520) {
+      await expect(page.locator('#comparison-scroll-hint')).toBeVisible();
+      const tableRegion = page.getByRole('region', { name: 'Scenario comparison table' });
+      await expect(tableRegion).toHaveAccessibleDescription(/Swipe to compare all three systems/);
+      await tableRegion.focus();
+      for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowRight');
+      await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+      await expect.poll(() => tableRegion.evaluate(el => {
+        const col = el.querySelector('thead th:last-child')!.getBoundingClientRect();
+        const region = el.getBoundingClientRect();
+        return col.right <= region.right && col.left >= region.left;
+      })).toBe(true);
+    }
   });
 }
 
