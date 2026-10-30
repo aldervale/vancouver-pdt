@@ -17,14 +17,14 @@ afterEach(() => {
 });
 
 describe('Regional clock map', () => {
-  it('sits between the policy note and the scenario caveat and records the October 28 check', () => {
+  it('sits between the policy note and the schedule controls', () => {
     const { container } = render(Page);
     const policy = container.querySelector('.policy-update')!;
     const clocks = container.querySelector('#regional-clocks')!;
-    const note = container.querySelector('.scenario-note')!;
-    expect(container.querySelector('.eyebrow')).toHaveTextContent('Policy checked October 28, 2026');
+    const controls = container.querySelector('.controls-row')!;
+    expect(container.querySelector('.eyebrow')).toBeNull();
     expect(policy.nextElementSibling).toBe(clocks);
-    expect(clocks.nextElementSibling).toBe(note);
+    expect(clocks.nextElementSibling).toBe(controls);
     expect(policy).toHaveTextContent('before-and-after clock map');
     const mapLinks = [...policy.querySelectorAll('a[href="#regional-clocks"]')].map((link) => link.textContent);
     expect(mapLinks).toEqual(['before-and-after clock map', 'Seattle']);

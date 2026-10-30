@@ -726,7 +726,6 @@
 
 <div class="container">
   <header>
-    <div class="eyebrow">B.C. · Policy checked October 28, 2026</div>
     <h1>No More Clock Changes<br />for Vancouver</h1>
     <p class="subtitle">
       Vancouver moved its clocks forward for the last time on March 8, 2026.
@@ -750,8 +749,6 @@
     </p>
   </section>
   <RegionalClocks />
-  <p class="scenario-note">These full-year chart scenarios are comparisons, not Vancouver's actual January–December 2026 clock history.
-    Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.</p>
 
   <div class="controls-row">
     <div class="selector-row">
@@ -1299,6 +1296,7 @@
       for Vancouver (49.28°N, 123.12°W), daily values for 2026.
       Waking window is user-configurable above.
       Vancouver's transition to year-round UTC−7 began March 8, 2026; the PCT abbreviation was announced September 17, 2026.
+      Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.
     </div>
   </footer>
 </div>
@@ -1337,15 +1335,6 @@
     max-width: 720px;
   }
 
-  .eyebrow {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--accent-orange);
-    margin-bottom: 16px;
-  }
-
   h1 {
     font-family: 'Playfair Display', serif;
     font-weight: 900;
@@ -1381,7 +1370,6 @@
   .policy-update h2 { font-size: 17px; margin: 0 0 8px; }
   .policy-update p + p { margin-top: 10px; }
   .policy-update a { color: var(--accent-gold); text-decoration: underline; }
-  .scenario-note { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin-bottom: 24px; }
 
   /* ─── Controls row ───────────────────────────────────── */
 

@@ -12,7 +12,8 @@ test.describe('Regional clock map', () => {
       const section = page.locator('#regional-clocks');
       await section.scrollIntoViewIfNeeded();
       await expect(section).toBeVisible();
-      await expect(page.locator('.eyebrow')).toContainText('Policy checked October 28, 2026');
+      await expect(page.locator('.eyebrow')).toHaveCount(0);
+      await expect(page.locator('.scenario-note')).toHaveCount(0);
       await expect(section.getByRole('table')).toBeVisible();
 
       const washington = section.locator('tr[data-region="washington"]');

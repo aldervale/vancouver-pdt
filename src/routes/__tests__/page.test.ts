@@ -80,11 +80,10 @@ describe('Page renders', () => {
     expect(h1!.textContent).toContain('No More Clock Changes');
   });
 
-  it('renders the eyebrow text', () => {
+  it('does not show the policy-check line above the title', () => {
     const { container } = render(Page);
-    const eyebrow = container.querySelector('.eyebrow');
-    expect(eyebrow).toBeTruthy();
-    expect(eyebrow!.textContent).toContain('B.C.');
+    expect(container.querySelector('.eyebrow')).toBeNull();
+    expect(container.querySelector('header')?.textContent).not.toMatch(/Policy checked/i);
   });
 });
 
@@ -367,19 +366,21 @@ describe('Current Pacific Time policy and model scope', () => {
     }
   });
 
-  it('places a full-year scenario caveat before the controls and distinguishes actual 2026 history', () => {
+  it('keeps the full-year history caveat in the notes, not above the chart', () => {
     const { container } = render(Page);
-    const note = container.querySelector('.scenario-note')!;
+    expect(container.querySelector('.scenario-note')).toBeNull();
+    expect(container.textContent).not.toContain('These full-year');
     const policy = container.querySelector('.policy-update')!;
     const clocks = container.querySelector('#regional-clocks')!;
     const controls = container.querySelector('.controls-row')!;
     expect(policy.nextElementSibling).toBe(clocks);
-    expect(clocks.nextElementSibling).toBe(note);
-    expect(note.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(note).toHaveTextContent('full-year chart scenarios are comparisons');
-    expect(note).toHaveTextContent("not Vancouver's actual January–December 2026 clock history");
-    expect(note).toHaveTextContent('Vancouver used PST until the March 8 clock change, including January and February');
-    expect(note).toHaveTextContent('not an IANA time-zone identifier');
+    expect(clocks.nextElementSibling).toBe(controls);
+    const dataNote = [...container.querySelectorAll('details')].find((details) => details.textContent?.includes('What data is this?'));
+    expect(dataNote).toHaveTextContent('full-year clock-system comparisons');
+    expect(dataNote).toHaveTextContent("not Vancouver's actual 2026 clock history");
+    const credit = container.querySelector('.footer-credit')!;
+    expect(credit).toHaveTextContent('Vancouver used PST until the March 8 clock change, including January and February');
+    expect(credit).toHaveTextContent('not an IANA time-zone identifier');
   });
 
   it('updates the accessible chart label with the selected comparison', async () => {

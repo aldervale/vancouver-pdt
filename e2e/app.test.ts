@@ -86,7 +86,16 @@ test.describe('Vancouver Pacific Time App', () => {
   });
 
   test('full-year comparisons remain clearly distinguished from actual 2026 clock history', async ({ page }) => {
-    const note = page.locator('.scenario-note');
+    await expect(page.locator('.scenario-note')).toHaveCount(0);
+    await expect(page.locator('.eyebrow')).toHaveCount(0);
+    await expect(page.getByText('These full-year')).toHaveCount(0);
+    const dataNote = page.locator('details').filter({ hasText: 'What data is this?' });
+    await dataNote.locator('summary').click();
+    await expect(dataNote).toContainText('full-year clock-system comparisons');
+    await expect(dataNote).toContainText("not Vancouver's actual 2026 clock history");
+    const credit = page.locator('.footer-credit');
+    await expect(credit).toContainText('Vancouver used PST until the March 8 clock change, including January and February');
+    await expect(credit).toContainText('not an IANA time-zone identifier');
     const chart = page.getByRole('img', { name: /Vancouver sunrise and sunset comparison/i });
     for (const [name, chartLabel] of [
       ['Pacific Time (PCT)', 'Pacific Time (PCT)'],
@@ -94,11 +103,6 @@ test.describe('Vancouver Pacific Time App', () => {
       ['Permanent PST', 'permanent PST'],
     ]) {
       await page.locator('.mode-toggle').getByRole('button', { name, exact: true }).click();
-      await expect(note).toBeVisible();
-      await expect(note).toContainText('full-year chart scenarios are comparisons');
-      await expect(note).toContainText("not Vancouver's actual January–December 2026 clock history");
-      await expect(note).toContainText('Vancouver used PST until the March 8 clock change, including January and February');
-      await expect(note).toContainText('not an IANA time-zone identifier');
       await expect(chart).toHaveAccessibleName(`Vancouver sunrise and sunset comparison under ${chartLabel}; summary values below`);
     }
   });
