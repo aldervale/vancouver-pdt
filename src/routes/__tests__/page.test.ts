@@ -609,3 +609,4 @@ function contrastRatio(foreground: string, background: string) {
   const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
+

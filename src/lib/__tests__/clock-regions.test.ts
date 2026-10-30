@@ -56,3 +56,4 @@ describe('regional clock offsets', () => {
     expect(byId.alaska.detail).toMatch(/Aleutian/);
   });
 });
+

@@ -1255,7 +1255,7 @@
           <div class="references-col-label">B.C. Coverage</div>
           <ul class="references-list">
             <li><a href="https://news.gov.bc.ca/releases/2026CITZ0009-001073" target="_blank" rel="noopener">Official Pacific Time (PCT) announcement</a> — Government of B.C., September 17, 2026.</li>
-            <li id="ref-bc-dst"><a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">Official year-round time and regional guidance</a> — Government of B.C., published October 28, 2026.</li>
+            <li id="ref-bc-dst"><a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">Official year-round time and regional guidance</a> — Government of B.C.</li>
             <li id="ref-nist"><a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">Current U.S. daylight saving time rules</a> — National Institute of Standards and Technology. In 2026 the fall-back is November 1 at 2 AM local time.</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/b-c-adopting-year-round-daylight-time-9.7111657" target="_blank" rel="noopener">Reactions mixed as B.C. ends time changes, adopts year-round daylight time</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/bc-permanent-daylight-saving-time-pacific-time-zone-clocks-9.7116954" target="_blank" rel="noopener">March 8 is the last time most British Columbians will change their clocks</a> — CBC News, Mar 2026</li>
@@ -1265,13 +1265,16 @@
           </ul>
           <div class="references-col-label">Regional clocks</div>
           <ul class="references-list">
+            <li id="ref-rdek"><a href="https://engage.rdek.bc.ca/timechange" target="_blank" rel="noopener">East Kootenay time change decision</a> — Regional District of East Kootenay. Permanent mountain daylight time (UTC−6).</li>
+            <li id="ref-golden"><a href="https://www.golden.ca/town-hall/news-notices/no-time-change-weekend-golden" target="_blank" rel="noopener">No time change this weekend in Golden</a> — Town of Golden, October 29, 2026. Golden and Area A stay at UTC−6.</li>
+            <li id="ref-us-map"><a href="https://www.bts.gov/explore-topics-and-geography/geography/geospatial-portal/history-time-zones-and-daylight-saving" target="_blank" rel="noopener">U.S. time-zone boundary map</a> — Bureau of Transportation Statistics, National Transportation Atlas Database.</li>
             <li id="ref-abt"><a href="https://www.alberta.ca/albertas-new-time-system-abt" target="_blank" rel="noopener">Alberta’s new time system (ABT)</a> — Government of Alberta. Alberta Time is UTC−6, and clocks stay there on November 1, 2026.</li>
             <li id="ref-nwt"><a href="https://www.gov.nt.ca/en/newsroom/northwest-territories-ends-seasonal-time-change" target="_blank" rel="noopener">Northwest Territories ends seasonal time change</a> — Government of the Northwest Territories, September 23, 2026. Northwest Territories Time is UTC−6.</li>
             <li id="ref-yukon"><a href="https://yukon.ca/en/your-government/about-yukon/learn-about-yukon-standard-time" target="_blank" rel="noopener">Learn about Yukon Standard Time</a> — Government of Yukon. The Yukon stays at UTC−7.</li>
             <li id="ref-sk"><a href="https://www.saskatchewan.ca/government/municipal-administration/tools-guides-and-resources/saskatchewan-time-system" target="_blank" rel="noopener">Saskatchewan time system</a> — Government of Saskatchewan. Central Standard Time, UTC−6, year-round.</li>
             <li id="ref-us-zones"><a href="https://www.ecfr.gov/current/title-49/subtitle-A/part-71" target="_blank" rel="noopener">Standard time zone boundaries, 49 CFR Part 71</a> — U.S. Code of Federal Regulations. Used for northern Idaho, Malheur County and Alaska.</li>
             <li id="ref-creston"><a href="https://www.explorecrestonvalley.com/time-zone" target="_blank" rel="noopener">Time zone in the Creston Valley</a> — Creston Valley. Creston keeps mountain standard time, UTC−7, year-round.</li>
-            <li id="ref-map"><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth 1:50m cultural vectors</a> — public-domain provincial and state outlines. U.S. county lines are simplified from the <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">Census Bureau cartographic boundaries</a> (public domain).</li>
+            <li id="ref-map"><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth 1:50m cultural vectors</a> — public-domain provincial and state outlines.</li>
           </ul>
         </div>
         <div class="references-col">
@@ -2334,3 +2337,4 @@
   :global(.daylight-tour .driver-popover-arrow-side-top) { border-bottom-color: #161b22; }
   :global(.daylight-tour .driver-popover-arrow-side-bottom) { border-top-color: #161b22; }
 </style>
+

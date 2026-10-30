@@ -59,6 +59,21 @@ test.describe('Regional clock map', () => {
     });
   }
 
+  test('date toggle supports keyboard selection and returning to the first morning', async ({ page }) => {
+    await page.goto('/');
+    const section = page.locator('#regional-clocks');
+    const before = section.locator('#clock-oct31');
+    const after = section.locator('#clock-nov1');
+    await before.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(after).toBeChecked();
+    await expect(section.locator('.callout-washington .for-nov1').first()).toBeVisible();
+    await page.keyboard.press('ArrowLeft');
+    await expect(before).toBeChecked();
+    await expect(section.locator('.callout-washington .for-oct31').first()).toBeVisible();
+    await expect(page.locator('footer .footer-credit')).toHaveCount(1);
+  });
+
   test('table, map toggle and source links work without JavaScript', async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const page = await context.newPage();
@@ -80,3 +95,4 @@ test.describe('Regional clock map', () => {
     await context.close();
   });
 });
+

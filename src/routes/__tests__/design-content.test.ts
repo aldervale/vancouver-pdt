@@ -60,7 +60,7 @@ describe('Design batch content', () => {
     const sources = container.querySelector('details.references-section')!;
     expect(sources).not.toHaveAttribute('open');
     expect(sources.querySelector('summary')).toHaveTextContent('Sources');
-    expect(sources.querySelectorAll('a').length).toBe(26);
+    expect(sources.querySelectorAll('a').length).toBe(28);
     expect(container.querySelectorAll('.faq-section details summary')).toHaveLength(3);
     expect(container.querySelector('.faq-section')).toHaveTextContent('not medical advice');
     const methodology = Array.from(container.querySelectorAll('a')).find(a => a.textContent === 'Data & methodology')!;

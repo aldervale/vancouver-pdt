@@ -55,3 +55,4 @@ describe('Regional clock map', () => {
     expect(table.querySelectorAll('tbody tr[data-region]')).toHaveLength(clockRegions.length);
   });
 });
+

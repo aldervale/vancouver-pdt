@@ -148,12 +148,14 @@
   </div>
 
   <p class="clock-notes">
-    Boundaries are simplified from <a href="#ref-map">Natural Earth</a> and U.S. census counties.
+    This is a simplified regional overview, not an address-level time-zone lookup. Provincial and state outlines are from <a href="#ref-map">Natural Earth</a>.
     Northeastern and southeastern B.C. follow the communities named in the province’s
-    <a href="#ref-bc-dst">October 28 guidance</a>.
+    <a href="#ref-bc-dst">time-zone guidance</a>; southeastern offsets are confirmed by the
+    <a href="#ref-rdek">East Kootenay decision</a> and <a href="#ref-golden">Golden’s October 29 reminder</a>.
     <a href="#ref-abt">Alberta</a>, the <a href="#ref-nwt">Northwest Territories</a>,
     <a href="#ref-yukon">Yukon</a> and <a href="#ref-sk">Saskatchewan</a> publish the offsets used here.
-    U.S. lines follow <a href="#ref-us-zones">49 CFR Part 71</a>, and the fall-back hour is the
+    U.S. time-zone lines are simplified from the <a href="#ref-us-map">BTS boundary map</a>, based on
+    <a href="#ref-us-zones">49 CFR Part 71</a>, and the fall-back hour is the
     <a href="#ref-nist">NIST date</a> already cited below.
     Nunavut spans more than one time zone and is not shown.
   </p>
@@ -402,3 +404,4 @@
     .zone { transition: fill 0.2s ease; }
   }
 </style>
+

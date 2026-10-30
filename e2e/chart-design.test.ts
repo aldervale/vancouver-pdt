@@ -63,7 +63,7 @@ for (const width of [320, 390, 1280]) {
   const page = await context.newPage();
   await page.goto('http://127.0.0.1:4173/');
   const sources = page.locator('details.references-section');
-  await expect(sources.locator('a')).toHaveCount(26);
+  await expect(sources.locator('a')).toHaveCount(28);
   await sources.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(sources.getByRole('link').first()).toBeVisible();
