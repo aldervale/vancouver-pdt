@@ -173,22 +173,27 @@
     mode === 'pdt' ? 'Pacific Time (PCT)' : mode === 'dst' ? 'old system' : 'permanent PST'
   );
 
+  // Intersect each day's modeled sunlight with the selected waking window.
+  const awakeDaylightHours = $derived(activeData.reduce((total, day) =>
+    total + Math.max(0, Math.min(day.sunset, sleepHour) - Math.max(day.sunrise, wakeHour)), 0));
+  let sourcesOpen = $state(false);
+
+  // Preserve direct links into the source list, including visits with a fragment.
+  onMount(() => {
+    const revealSource = () => {
+      if (window.location.hash.startsWith('#ref-')) sourcesOpen = true;
+    };
+    revealSource();
+    window.addEventListener('hashchange', revealSource);
+    return () => window.removeEventListener('hashchange', revealSource);
+  });
+
   // Month start day-of-year values (1-indexed)
   const MONTH_START_DOY = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
 
   // Sports panel: static time data
   // All times verified using UTC arithmetic for winter months (when DST and PST are identical at UTC-8)
   //
-  // TASK A — Sep 30 double-value investigation:
-  // The overlay tooltip (handleMouseMove) snaps to exactly one dayIdx per event and draws one box,
-  // so it cannot produce two tooltip boxes on its own. The most likely cause of "two values near Sep 30"
-  // is that the min/max curve labels drawn on the MAIN canvas (e.g. latest sunrise / earliest sunset)
-  // visually coincide with the tooltip overlay when hovering near Sep 30, making it look like two data
-  // points are shown. The Math.round() snap is correct and not the cause. No fix applied — the extremes
-  // are not actually at Sep 30, but label placement (drawn at -8px above curves) may overlap the tooltip
-  // box when hovering anywhere near a labelled extremum. If this becomes annoying, consider only drawing
-  // min/max labels on hover, or suppressing them when the tooltip is visible.
-
   type SportEntry = {
     icon: string;
     league: string;
@@ -294,7 +299,9 @@
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement!.getBoundingClientRect();
     const W = rect.width;
-    const H = 420;
+    // The docked tour needs the chart fully above it. 420px cannot fit on a short phone.
+    const viewportH = window.innerHeight || 900;
+    const H = viewportH < 680 ? Math.max(220, Math.min(420, viewportH - 360)) : 420;
 
     canvas.width = W * dpr;
     canvas.height = H * dpr;
@@ -303,8 +310,8 @@
     ctx.scale(dpr, dpr);
 
     const padLeft = 94;
-    const padRight = W < 500 ? 20 : 82;
-    const padTop = mode === 'dst' ? (W < 500 ? 70 : 44) : 18;
+    const padRight = 20;
+    const padTop = 30;
     const padBottom = 40;
 
     const chartW = W - padLeft - padRight;
@@ -436,69 +443,24 @@
     }
     ctx.restore();
 
-    // DST annotations — spring forward day 67 (March 8), fall back day 305 (Nov 1)
-    if (mode === 'dst') {
-      const springX = xPosDoy(67);
-      const fallX = xPosDoy(305);
-
-      ctx.save();
-      ctx.strokeStyle = 'rgba(139, 148, 158, 0.35)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 3]);
-
+    // Numbered date markers correspond to the wrapping HTML key above the chart.
+    // Keeping long labels out of the plotting area prevents phone-width collisions.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(139, 148, 158, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    keyDates.forEach((marker, i) => {
+      const x = xPosDoy(marker.day);
       ctx.beginPath();
-      ctx.moveTo(springX, padTop);
-      ctx.lineTo(springX, padTop + chartH);
+      ctx.moveTo(x, padTop);
+      ctx.lineTo(x, padTop + chartH);
       ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(fallX, padTop);
-      ctx.lineTo(fallX, padTop + chartH);
-      ctx.stroke();
-
-      ctx.setLineDash([]);
-
-      ctx.font = '600 12px "DM Sans"';
+      ctx.fillStyle = '#c9d1d9';
+      ctx.font = '700 12px "DM Sans"';
       ctx.textAlign = 'center';
-
-      const labelY = 18;
-      const springLabel = '▲ Spring Forward';
-      const fallLabel = '▼ Fall Back';
-      const springW = ctx.measureText(springLabel).width + 12;
-      const fallW = ctx.measureText(fallLabel).width + 12;
-      const badgeH = 22;
-      const badgeR = 3;
-
-      ctx.fillStyle = 'rgba(20, 28, 40, 0.82)';
-      ctx.beginPath();
-      ctx.roundRect(Math.max(padLeft, Math.min(springX - springW / 2, W - springW)), labelY - 11, springW, badgeH, badgeR);
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(139, 148, 158, 0.4)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.roundRect(Math.max(padLeft, Math.min(springX - springW / 2, W - springW)), labelY - 11, springW, badgeH, badgeR);
-      ctx.stroke();
-
-      ctx.fillStyle = '#a8b3bf';
-      ctx.fillText(springLabel, Math.max(padLeft + springW / 2, Math.min(springX, W - springW / 2)), labelY);
-
-      ctx.fillStyle = 'rgba(20, 28, 40, 0.82)';
-      ctx.beginPath();
-      ctx.roundRect(Math.max(padLeft, Math.min(fallX - fallW / 2, W - fallW)), labelY - 11 + (chartW < 300 ? 24 : 0), fallW, badgeH, badgeR);
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(139, 148, 158, 0.4)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.roundRect(Math.max(padLeft, Math.min(fallX - fallW / 2, W - fallW)), labelY - 11 + (chartW < 300 ? 24 : 0), fallW, badgeH, badgeR);
-      ctx.stroke();
-
-      ctx.fillStyle = '#a8b3bf';
-      ctx.fillText(fallLabel, Math.max(padLeft + fallW / 2, Math.min(fallX, W - fallW / 2)), labelY + (chartW < 300 ? 24 : 0));
-
-      ctx.restore();
-    }
+      ctx.fillText(String(i + 1), x, 16);
+    });
+    ctx.restore();
 
     // Wake / sleep dashed lines
     ctx.strokeStyle = 'rgba(230, 237, 243, 0.25)';
@@ -514,11 +476,18 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = TEXT_MUTED;
-    ctx.font = '600 12px "DM Sans"';
-    ctx.textAlign = 'right';
-    ctx.fillText(`WAKE ${formatHour(WAKE)}`, padLeft - 6, wakeY + 3);
-    ctx.fillText(`SLEEP ${formatHour(SLEEP)}`, padLeft - 6, sleepY + 3);
+    const labelBaselines: number[] = [];
+    const MIN_LABEL_GAP = 14;
+    function drawAxisLabel(text: string, baseline: number, font: string, force = false) {
+      if (!force && labelBaselines.some(y => Math.abs(y - baseline) < MIN_LABEL_GAP)) return;
+      ctx.fillStyle = TEXT_MUTED;
+      ctx.font = font;
+      ctx.textAlign = 'right';
+      ctx.fillText(text, padLeft - 6, baseline);
+      labelBaselines.push(baseline);
+    }
+    drawAxisLabel(`WAKE ${formatHour(WAKE)}`, wakeY + 3, '600 12px "DM Sans"', true);
+    drawAxisLabel(`SLEEP ${formatHour(SLEEP)}`, sleepY + 3, '600 12px "DM Sans"', true);
 
     // Sunrise curve
     ctx.strokeStyle = '#e76f51';
@@ -534,42 +503,29 @@
     traceCurveFwd(sunsetPts);
     ctx.stroke();
 
-    // Curve labels (right side, at Dec 31 = day 365)
-    ctx.font = '600 12px "DM Sans"';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#e76f51';
-    ctx.fillText('SUNRISE', W - 4, yPos(data[364].sunrise) + 3);
-    ctx.fillStyle = '#f0c654';
-    ctx.fillText('SUNSET', W - 4, yPos(data[364].sunset) + 3);
-
-    // Y-axis labels
-    ctx.font = '500 12px "DM Sans"';
-    ctx.textAlign = 'right';
+    // Y-axis labels. Wake and sleep are already placed, so nearby hours drop out
+    // when a short chart would otherwise stack 12px text on top of itself.
+    const yLabels = [];
     for (let h = 5; h <= 26; h++) {
       if (h === WAKE || h === SLEEP) continue;
-      const y = yPos(h);
+      const text = h === 12 ? 'NOON'
+        : h === 24 ? '12 AM'
+        : h === 25 ? '1 AM'
+        : h === 26 ? '2 AM'
+        : h < 12 ? `${h} AM`
+        : `${h - 12} PM`;
+      yLabels.push({ h, text });
+    }
+    yLabels.sort((a, b) => Number(b.h === 12 || b.h === 24) - Number(a.h === 12 || a.h === 24));
+    for (const { h, text } of yLabels) {
       if (h === 12) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('NOON', padLeft - 6, y + 3);
         ctx.strokeStyle = 'rgba(230, 237, 243, 0.06)';
         ctx.beginPath();
-        ctx.moveTo(padLeft, y);
-        ctx.lineTo(padLeft + chartW, y);
+        ctx.moveTo(padLeft, yPos(h));
+        ctx.lineTo(padLeft + chartW, yPos(h));
         ctx.stroke();
-      } else if (h === 24) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('12 AM', padLeft - 6, y + 3);
-      } else if (h === 25) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('1 AM', padLeft - 6, y + 3);
-      } else if (h === 26) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('2 AM', padLeft - 6, y + 3);
-      } else {
-        ctx.fillStyle = TEXT_MUTED;
-        const label = h < 12 ? `${h} AM` : `${h - 12} PM`;
-        ctx.fillText(label, padLeft - 6, y + 3);
       }
+      drawAxisLabel(text, yPos(h) + 3, '500 12px "DM Sans"');
     }
 
     // X-axis: month labels at 1st of each month
@@ -577,30 +533,12 @@
     ctx.font = '600 12px "DM Sans"';
     ctx.textAlign = 'center';
     MONTH_START_DOY.forEach((doy, i) => {
-      if (chartW < 400 && i % 2 !== 0) return;
+      const monthStep = chartW < 220 ? 3 : chartW < 400 ? 2 : 1;
+      if (i % monthStep !== 0) return;
       ctx.fillText(MONTH_NAMES[i], xPosDoy(doy), padTop + chartH + 24);
     });
 
-    // Min/max time labels on curves
-    const maxSunriseIdx = data.reduce((mi, d, i, arr) => d.sunrise > arr[mi].sunrise ? i : mi, 0);
-    const minSunriseIdx = data.reduce((mi, d, i, arr) => d.sunrise < arr[mi].sunrise ? i : mi, 0);
-    const maxSunsetIdx = data.reduce((mi, d, i, arr) => d.sunset > arr[mi].sunset ? i : mi, 0);
-    const minSunsetIdx = data.reduce((mi, d, i, arr) => d.sunset < arr[mi].sunset ? i : mi, 0);
-
-    ctx.font = '700 12px "DM Sans"';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#e76f51';
-    // For each extremum label, flip below the curve if drawing above would clip the top edge
-    const minLabelClearance = padTop + 12;
-    const maxSunriseY = yPos(data[maxSunriseIdx].sunrise);
-    ctx.fillText(decimalToTime(data[maxSunriseIdx].sunrise), xPosDoy(data[maxSunriseIdx].dayOfYear),
-      maxSunriseY - 8 < minLabelClearance ? maxSunriseY + 14 : maxSunriseY - 8);
-    const minSunriseY = yPos(data[minSunriseIdx].sunrise);
-    ctx.fillText(decimalToTime(data[minSunriseIdx].sunrise), xPosDoy(data[minSunriseIdx].dayOfYear),
-      minSunriseY - 8 < minLabelClearance ? minSunriseY + 14 : minSunriseY - 8);
-    ctx.fillStyle = '#f0c654';
-    ctx.fillText(decimalToTime(data[maxSunsetIdx].sunset), xPosDoy(data[maxSunsetIdx].dayOfYear), yPos(data[maxSunsetIdx].sunset) + 15);
-    ctx.fillText(decimalToTime(data[minSunsetIdx].sunset), xPosDoy(data[minSunsetIdx].dayOfYear), yPos(data[minSunsetIdx].sunset) + 15);
+    // Exact extremes are labelled in the HTML summary below, never on curve edges.
 
     chartLayout = { padLeft, padTop, chartW, chartH, W, H, yMin, yMax };
   }
@@ -616,93 +554,44 @@
     overlayCanvas.style.height = canvas.style.height;
   }
 
-  function handleMouseMove(e: MouseEvent) {
-    if (!overlayCanvas) return;
-    const data = activeData;
-    const { padLeft, padTop, chartW, chartH, yMin, yMax } = chartLayout;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = overlayCanvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left);
-    const my = (e.clientY - rect.top);
+  const keyDates = $derived(mode === 'dst'
+    ? [{ day: 67, label: 'Mar 8 · Spring forward' }, { day: 305, label: 'Nov 1 · Fall back' }]
+    : [{ day: 305, label: 'Nov 1 · No fall back' }, { day: 355, label: 'Dec 21 · Winter solstice' }]);
+  let selectedDay = $state(0);
+  let detailsVisible = $state(false);
+  const selectedDate = $derived(activeData[selectedDay]);
+  const dateDetails = $derived(`${MONTH_FULL[selectedDate.date.getMonth()]} ${selectedDate.date.getDate()}, 2026: sunrise ${fmtTime(selectedDate.sunrise)}, sunset ${fmtTime(selectedDate.sunset)}; ${fmtDayLength(selectedDate.sunset - selectedDate.sunrise)} of daylight.`);
 
+  function drawDateIndicator() {
+    if (!overlayCanvas) return;
     const ctx = overlayCanvas.getContext('2d');
     if (!ctx) return;
+    const { padLeft, padTop, chartW, chartH } = chartLayout;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-    ctx.scale(dpr, dpr);
-
-    const relX = mx - padLeft;
-    if (relX < 0 || relX > chartW || my < padTop || my > padTop + chartH) return;
-
-    // Snap to nearest day index (0–364)
-    let dayIdx = Math.round(relX / chartW * 364);
-    dayIdx = Math.max(0, Math.min(364, dayIdx));
-
-    const d = data[dayIdx];
-    if (!d) return;
-
-    const cx = padLeft + ((d.dayOfYear - 1) / 364) * chartW;
-
-    // Vertical indicator line
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    if (!detailsVisible) return;
+    ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    const x = padLeft + selectedDay / 364 * chartW;
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(cx, padTop);
-    ctx.lineTo(cx, padTop + chartH);
+    ctx.moveTo(x, padTop);
+    ctx.lineTo(x, padTop + chartH);
     ctx.stroke();
-
-    // Tooltip content
-    const monthName = MONTH_FULL[d.date.getMonth()];
-    const dayNum = d.date.getDate();
-    const fullDate = `${monthName} ${dayNum}`;
-    const dayLength = d.sunset - d.sunrise;
-    const lines = [
-      fullDate,
-      `🌅 ${fmtTime(d.sunrise)}`,
-      `🌇 ${fmtTime(d.sunset)}`,
-      `☀️ ${fmtDayLength(dayLength)}`,
-    ];
-
-    ctx.font = '700 13px "DM Sans"';
-    const titleW = ctx.measureText(fullDate).width;
-    ctx.font = '400 12px "DM Sans"';
-    const lineWidths = lines.slice(1).map(l => ctx.measureText(l).width);
-    const boxW = Math.max(titleW, ...lineWidths) + 28;
-    const boxH = 84;
-
-    let tx = mx + 14;
-    let ty = my - boxH / 2;
-    if (tx + boxW > padLeft + chartW) tx = mx - boxW - 14;
-    if (ty < padTop) ty = padTop;
-    if (ty + boxH > padTop + chartH) ty = padTop + chartH - boxH;
-
-    ctx.fillStyle = '#0d1117';
-    ctx.strokeStyle = '#30363d';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(tx, ty, boxW, boxH, 8);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#e6edf3';
-    ctx.font = '700 13px "DM Sans"';
-    ctx.textAlign = 'left';
-    ctx.fillText(fullDate, tx + 14, ty + 20);
-    ctx.font = '400 12px "DM Sans"';
-    ctx.fillText(lines[1], tx + 14, ty + 38);
-    ctx.fillText(lines[2], tx + 14, ty + 54);
-    ctx.fillStyle = TEXT_MUTED;
-    ctx.fillText(lines[3], tx + 14, ty + 70);
   }
 
-  // Need TEXT_MUTED accessible in handleMouseMove
-  const TEXT_MUTED = '#8b949e';
-
-  function handleMouseLeave() {
+  function handlePointerMove(e: PointerEvent) {
     if (!overlayCanvas) return;
-    const ctx = overlayCanvas.getContext('2d');
-    if (ctx) ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    const { padLeft, padTop, chartW, chartH } = chartLayout;
+    const rect = overlayCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left - padLeft;
+    const y = e.clientY - rect.top - padTop;
+    if (chartW <= 0 || x < 0 || x > chartW || y < 0 || y > chartH) return;
+    selectedDay = Math.max(0, Math.min(364, Math.round(x / chartW * 364)));
+    detailsVisible = true;
   }
+
+  $effect(() => { selectedDay; detailsVisible; chartLayout; drawDateIndicator(); });
 
     let fontsReady = false;
   $effect(() => {
@@ -718,6 +607,7 @@
   let tour: ReturnType<typeof driver> | undefined;
   let tourTimer: ReturnType<typeof setTimeout> | undefined;
   let releaseTourFocus: (() => void) | undefined;
+  let releaseTourLayout: (() => void) | undefined;
 
   function rememberTourDismissal() {
     try { localStorage.setItem('vdt_tour_done', '1'); } catch { /* Storage may be blocked. */ }
@@ -730,9 +620,14 @@
     const finishTour = () => {
       releaseTourFocus?.();
       releaseTourFocus = undefined;
+      releaseTourLayout?.();
+      releaseTourLayout = undefined;
       rememberTourDismissal();
       // Driver restores its own last-step focus after its callbacks.
       queueMicrotask(() => { if (previousFocus?.isConnected) previousFocus.focus(); });
+    };
+    const positionTarget = (element?: Element) => {
+      if (element) window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 16, behavior: 'instant' });
     };
     tour = driver({
       showProgress: true,
@@ -752,6 +647,15 @@
         activeTour.destroy();
       },
       onDestroyed: finishTour,
+      onHighlightStarted: element => positionTarget(element),
+      onHighlighted: (element, _step, { driver: activeTour }) => {
+        // Reserve the bottom of the viewport for the docked explanation. Driver's
+        // default centering can put tall targets behind its fallback popover.
+        if (element) {
+          positionTarget(element);
+          activeTour.refresh();
+        }
+      },
       onPopoverRender: (popover, { driver: activeTour }) => {
         popover.closeButton.setAttribute('aria-label', 'Close tour');
         popover.previousButton.hidden = activeTour.isFirstStep();
@@ -770,10 +674,17 @@
       steps: [
         { element: '.selector-row', popover: { title: 'Your schedule', description: 'Set your typical wake-up and bedtime to see how daylight fits your day.', side: 'bottom', align: 'start' } },
         { element: '.mode-toggle', popover: { title: 'Three scenarios', description: 'Compare Pacific Time (PCT), the old clock-change system, and permanent standard time.', side: 'bottom', align: 'center' } },
-        { element: '.chart-wrapper', popover: { title: 'Your daylight', description: 'The gold band shows sunlight during your waking hours. Hover over any date to see exact sunrise and sunset times.', side: 'over', align: 'center' } },
+        { element: '.canvas-container', popover: { title: 'Your daylight', description: 'The gold band shows sunlight during your waking hours. Hover, tap, or use the date control below the chart for sunrise and sunset times.', side: 'bottom', align: 'center' } },
         { element: '.context-toggle-grid', popover: { title: 'Your daily life', description: 'See how the time change affects sports, school mornings, evenings after work, and the stock market.', side: 'bottom', align: 'center' } },
       ],
     });
+    const repositionTour = () => {
+      if (!tour?.isActive()) return;
+      positionTarget(tour.getActiveElement());
+      tour.refresh();
+    };
+    window.addEventListener('resize', repositionTour);
+    releaseTourLayout = () => window.removeEventListener('resize', repositionTour);
     tour.drive();
   }
 
@@ -799,6 +710,8 @@
       tour?.destroy();
       releaseTourFocus?.();
       releaseTourFocus = undefined;
+      releaseTourLayout?.();
+      releaseTourLayout = undefined;
       window.removeEventListener('resize', handleResize);
       document.fonts?.removeEventListener?.('loadingdone', handleFontsLoaded);
     };
@@ -812,7 +725,6 @@
 
 <div class="container">
   <header>
-    <div class="eyebrow">B.C. · Policy checked October 24, 2026</div>
     <h1>No More Clock Changes<br />for Vancouver</h1>
     <p class="subtitle">
       Vancouver moved its clocks forward for the last time on March 8, 2026.
@@ -834,8 +746,6 @@
       Later evening light also means later winter sunrises, not an established health advantage over permanent standard time.
     </p>
   </section>
-  <p class="scenario-note">These full-year chart scenarios are comparisons, not Vancouver's actual January–December 2026 clock history.
-    Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.</p>
 
   <div class="controls-row">
     <div class="selector-row">
@@ -889,9 +799,19 @@
         {/if}
       </div>
     </div>
+    <ol class="key-dates" aria-label="Chart key dates">
+      {#each keyDates as marker}<li>{marker.label}</li>{/each}
+    </ol>
     <div class="canvas-container" role="img" aria-label="Vancouver sunrise and sunset comparison under {modeLabel}; summary values below">
       <canvas bind:this={canvas} aria-hidden="true"></canvas>
-      <canvas bind:this={overlayCanvas} aria-hidden="true" class="overlay-canvas" onmousemove={handleMouseMove} onmouseleave={handleMouseLeave}></canvas>
+      <canvas bind:this={overlayCanvas} aria-hidden="true" class="overlay-canvas" onpointermove={handlePointerMove} onpointerdown={handlePointerMove}></canvas>
+    </div>
+    <div class="date-inspector">
+      <label for="chart-date">Explore a date <span>(tap the chart or use arrow keys here)</span></label>
+      <input id="chart-date" type="range" min="0" max="364" step="1" bind:value={selectedDay}
+        aria-valuetext={dateDetails} aria-describedby="chart-date-details"
+        onfocus={() => detailsVisible = true} oninput={() => detailsVisible = true} />
+      <p id="chart-date-details" role="tooltip" aria-live="polite">{#if detailsVisible}{dateDetails}{:else}Choose a date to see sunrise, sunset and daylight duration.{/if}</p>
     </div>
     <div class="legend">
       <div class="legend-item">
@@ -916,6 +836,11 @@
       </div>
     </div>
   </div>
+
+  <p class="daylight-takeaway" aria-live="polite" aria-atomic="true">
+    Under {modeLabel}, the {formatHour(wakeHour)}–{formatHour(sleepHour)} waking window overlaps approximately
+    <strong>{Math.round(awakeDaylightHours).toLocaleString('en-CA')} hours of sunlight</strong> across all 365 calendar days in the 2026 model.
+  </p>
 
   <div class="stats-strip">
     <div class="stat-item">
@@ -974,7 +899,7 @@
       {:else if mode === 'dst'}
         <div class="insight-label">The hidden cost</div>
         <div class="insight-text">
-          Spring clock changes can <a href="#ref-sleep">disrupt sleep</a> and have been linked in some observational studies to <a href="#ref-crashes">more fatal crashes</a>. <a href="#ref-heart">Heart-attack findings vary</a>. Ending clock changes is a separate choice from permanent daylight time: <a href="#ref-aasm">sleep specialists favor permanent standard time</a>.
+          Spring clock changes can <a onclick={() => sourcesOpen = true} href="#ref-sleep">disrupt sleep</a> and have been linked in some observational studies to <a onclick={() => sourcesOpen = true} href="#ref-crashes">more fatal crashes</a>. <a onclick={() => sourcesOpen = true} href="#ref-heart">Heart-attack findings vary</a>. Ending clock changes is a separate choice from permanent daylight time: <a onclick={() => sourcesOpen = true} href="#ref-aasm">sleep specialists favor permanent standard time</a>.
         </div>
       {:else}
         <div class="insight-label">Evening trade-off</div>
@@ -984,6 +909,25 @@
       {/if}
     </div>
   </div>
+
+  <section class="scenario-comparison" aria-labelledby="comparison-heading">
+    <h2 id="comparison-heading">The scenarios at a glance</h2>
+    <p id="comparison-note">Vancouver, 2026. Counts include weekends and holidays, not actual school days or commutes. Twilight is not modeled.</p>
+    <p id="comparison-scroll-hint" class="comparison-scroll-hint">↔ Swipe to compare all three systems, or focus the table and use the left and right arrow keys.</p>
+    <!-- Keyboard focus lets users scroll the comparison horizontally on narrow screens. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div class="comparison-scroll" tabindex="0" role="region" aria-label="Scenario comparison table" aria-describedby="comparison-note comparison-scroll-hint">
+      <table>
+        <caption>Full-year modeled daylight by clock system</caption>
+        <thead><tr><th scope="col">Measure</th><th scope="col">PCT</th><th scope="col">Old system</th><th scope="col">PST</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Calendar days with sunrise after 8:30 AM</th><td>{schoolDarkDays.pdt}</td><td>{schoolDarkDays.dst}</td><td>{schoolDarkDays.pst}</td></tr>
+          <tr><th scope="row">Calendar days with sunset after 5 PM</th><td>{workDaylightDays.pdt}</td><td>{workDaylightDays.dst}</td><td>{workDaylightDays.pst}</td></tr>
+          <tr><th scope="row">Latest sunrise</th><td>{fmtTime(worstSunrisePDT.sunrise)}</td><td>{fmtTime(worstSunriseDST.sunrise)}</td><td>{fmtTime(worstSunrisePST.sunrise)}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
   <!-- Context panel toggles — 2×2 grid -->
   <div class="context-toggle-grid">
@@ -1113,7 +1057,7 @@
       </div>
 
       <div class="sports-footnote">
-        Counts include all 365 dates in 2026, including weekends and school holidays. Before sunrise does not mean completely dark: twilight is not modeled. Actual school times vary: <a href="#ref-school-secondary">VSB secondary guidance</a> uses 8:40 AM, while <a href="#ref-school-elementary">David Oppenheimer Elementary</a> lists 9:00 AM. Check your own school and travel time.
+        Counts include all 365 dates in 2026, including weekends and school holidays. Before sunrise does not mean completely dark: twilight is not modeled. Actual school times vary: <a onclick={() => sourcesOpen = true} href="#ref-school-secondary">VSB secondary guidance</a> uses 8:40 AM, while <a onclick={() => sourcesOpen = true} href="#ref-school-elementary">David Oppenheimer Elementary</a> lists 9:00 AM. Check your own school and travel time.
       </div>
     </div>
   </div>
@@ -1281,13 +1225,30 @@
   </div>
 
   <footer>
+    <p class="scenario-note">These full-year chart scenarios are comparisons, not Vancouver's actual January–December 2026 clock history.
+      Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.</p>
     <div class="about-project">
       <strong>About BC Daylight</strong>
       <p>An independent, open-source comparison of Vancouver daylight under three clock systems. Created by Adam Stuckert. <a href="https://github.com/aldervale/vancouver-pdt" target="_blank" rel="noopener">Source code &amp; feedback</a> · <a href="https://github.com/aldervale/vancouver-pdt/blob/c95707ca05e70df11800536572a05a76d77577a3/README.md#data--methodology" target="_blank" rel="noopener">Data &amp; methodology</a>.</p>
       <p>Model year: 2026 · Site update: <time datetime="2026-10-28">October 28, 2026</time>.</p>
     </div>
-    <div class="references-section">
-      <div class="references-title">References &amp; Further Reading</div>
+    <section class="faq-section" aria-labelledby="faq-heading">
+      <h2 id="faq-heading">Frequently asked questions</h2>
+      <details>
+        <summary>Why are mornings later under PCT?</summary>
+        <p>PCT uses UTC−7 throughout the year, one hour ahead of permanent PST (UTC−8). The same sunrise and sunset therefore appear one hour later on the clock; the amount of sunlight does not change. The old system used UTC−8 in winter and UTC−7 in summer.</p>
+      </details>
+      <details>
+        <summary>What data is this?</summary>
+        <p>SunCalc estimates sunrise and sunset for Vancouver (49.28°N, 123.12°W) on every date in 2026. These are full-year clock-system comparisons, not Vancouver's actual 2026 clock history. The chart intersects those estimates with your selected waking window; it does not account for weather, terrain, twilight or individual routines. See the Data &amp; methodology link above for the assumptions.</p>
+      </details>
+      <details>
+        <summary>Is this health advice?</summary>
+        <p>No. This is an informational daylight comparison, not medical advice or a prediction of individual health outcomes. The source list provides research context; it does not establish that a clock system will cause a particular outcome for you.</p>
+      </details>
+    </section>
+    <details class="references-section" bind:open={sourcesOpen}>
+      <summary class="references-title">Sources</summary>
       <div class="references-grid">
         <div class="references-col">
           <div class="references-col-label">B.C. Coverage</div>
@@ -1305,6 +1266,7 @@
         <div class="references-col">
           <div class="references-col-label">Science &amp; School Sources</div>
           <ul class="references-list">
+            <li><a href="https://www.cnrc.canada.ca/en/certifications-evaluations-standards/canadas-official-time/when-do-seasons-start" target="_blank" rel="noopener">When do the seasons start?</a> — National Research Council Canada. The 2026 December solstice is December 21 at 20:50 UTC (12:50 PM PST / 1:50 PM PCT).</li>
             <li><a href="https://www.cbc.ca/news/canada/bc-daylight-saving-health-concerns-9.7114947" target="_blank" rel="noopener">'Scientifically not a good idea,' says researcher — health concerns over permanent PDT</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/daylight-saving-time-canada-9.7113377" target="_blank" rel="noopener">B.C. is moving to permanent daylight time. Could your province be next?</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/london/should-ontario-follow-bc-daylight-savings-9.7113343" target="_blank" rel="noopener">B.C. is scrapping time changes. Should Ontario be next?</a> — CBC News, Mar 2026</li>
@@ -1317,7 +1279,7 @@
           </ul>
         </div>
       </div>
-    </div>
+    </details>
     <div class="footer-credit">
       Sunrise/sunset computed with <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>
       for Vancouver (49.28°N, 123.12°W), daily values for 2026.
@@ -1328,6 +1290,26 @@
 </div>
 
 <style>
+  .daylight-takeaway { margin: 18px 0; color: var(--text-muted); font-size: 15px; line-height: 1.65; }
+  .daylight-takeaway strong { color: var(--text-primary); font-weight: 600; }
+  .scenario-comparison { margin: 28px 0; }
+  .scenario-comparison h2, .faq-section h2 { font-size: 18px; margin: 0 0 10px; color: var(--text-primary); }
+  .scenario-comparison p { font-size: 13px; line-height: 1.6; color: var(--text-muted); margin: 0 0 14px; }
+  .scenario-comparison .comparison-scroll-hint { display: none; color: var(--accent-gold); }
+  @media (max-width: 520px) { .scenario-comparison .comparison-scroll-hint { display: block; } }
+  .comparison-scroll { overflow-x: auto; border: 1px solid #30363d; border-radius: 10px; }
+  .comparison-scroll table { width: 100%; min-width: 420px; border-collapse: collapse; font-size: 13px; }
+  .comparison-scroll caption { text-align: left; padding: 12px; color: var(--text-muted); }
+  .comparison-scroll th, .comparison-scroll td { padding: 12px; border-top: 1px solid #30363d; text-align: left; line-height: 1.5; }
+  .comparison-scroll th[scope="row"] { font-weight: 500; width: 46%; }
+  .comparison-scroll td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .comparison-scroll thead { background: #161b22; }
+  .faq-section { margin: 24px 0; }
+  .faq-section details { border-bottom: 1px solid #30363d; padding: 12px 0; }
+  .faq-section summary, .references-title { cursor: pointer; color: var(--text-primary); font-weight: 600; font-size: 14px; }
+  .faq-section p { max-width: 75ch; font-size: 13px; margin: 10px 0 0; }
+  .faq-section summary:focus-visible, .references-title:focus-visible, .comparison-scroll:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 4px; }
+
   .container {
     max-width: 1100px;
     margin: 0 auto;
@@ -1339,15 +1321,6 @@
   header {
     margin-bottom: 40px;
     max-width: 720px;
-  }
-
-  .eyebrow {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--accent-orange);
-    margin-bottom: 16px;
   }
 
   h1 {
@@ -1563,6 +1536,14 @@
     left: 0;
     cursor: crosshair;
   }
+
+  .key-dates { list-style: decimal; display: flex; flex-wrap: wrap; gap: 6px 28px; padding-left: 22px; margin: 0 0 12px; color: #c9d1d9; font-size: 13px; }
+  .key-dates li::marker { font-weight: 700; }
+  .date-inspector { margin-top: 12px; font-size: 13px; }
+  .date-inspector label { display: block; font-weight: 600; }
+  .date-inspector label span { font-weight: 400; color: var(--text-muted); }
+  .date-inspector input { width: 100%; min-height: 32px; }
+  .date-inspector p { min-height: 3em; margin: 4px 0 0; line-height: 1.5; color: var(--text-primary); }
 
   /* Legend */
   .legend {
@@ -2320,7 +2301,13 @@
     background: #161b22; border: 1px solid #8b949e; color: #e6edf3;
     width: min(360px, calc(100vw - 40px)); max-width: calc(100vw - 40px);
     padding: 20px; font-family: 'DM Sans', sans-serif;
+    /* A stable dock avoids Driver's overlapping fallback when neither side fits. */
+    position: fixed !important; top: auto !important; bottom: 16px !important;
+    /* Driver writes translateY inline for bottom-side arrows; keep our X centering. */
+    left: 50% !important; right: auto !important; transform: translateX(-50%) !important;
+    max-height: calc(100dvh - 32px); overflow-y: auto;
   }
+  :global(.daylight-tour .driver-popover-arrow) { display: none; }
   :global(.daylight-tour .driver-popover-title) { color: #f5f0e8; font-family: 'Playfair Display', serif; font-size: 22px; padding-right: 20px; }
   :global(.daylight-tour .driver-popover-description) { color: #e6edf3; font-size: 15px; line-height: 1.6; }
   :global(.daylight-tour .driver-popover-progress-text) { color: #c0c8d2; font-size: 13px; }
