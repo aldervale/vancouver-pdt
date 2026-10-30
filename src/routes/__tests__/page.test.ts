@@ -80,11 +80,10 @@ describe('Page renders', () => {
     expect(h1!.textContent).toContain('No More Clock Changes');
   });
 
-  it('renders the eyebrow text', () => {
+  it('omits the redundant policy-check eyebrow', () => {
     const { container } = render(Page);
     const eyebrow = container.querySelector('.eyebrow');
-    expect(eyebrow).toBeTruthy();
-    expect(eyebrow!.textContent).toContain('B.C.');
+    expect(eyebrow).toBeNull();
   });
 });
 
@@ -367,13 +366,12 @@ describe('Current Pacific Time policy and model scope', () => {
     }
   });
 
-  it('places a full-year scenario caveat before the controls and distinguishes actual 2026 history', () => {
+  it('keeps the full-year scenario caveat in bottom notes and distinguishes actual 2026 history', () => {
     const { container } = render(Page);
     const note = container.querySelector('.scenario-note')!;
-    const policy = container.querySelector('.policy-update')!;
     const controls = container.querySelector('.controls-row')!;
-    expect(policy.nextElementSibling).toBe(note);
-    expect(note.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(note.closest('footer')).toBeTruthy();
+    expect(controls.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(note).toHaveTextContent('full-year chart scenarios are comparisons');
     expect(note).toHaveTextContent("not Vancouver's actual January–December 2026 clock history");
     expect(note).toHaveTextContent('Vancouver used PST until the March 8 clock change, including January and February');

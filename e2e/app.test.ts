@@ -86,7 +86,9 @@ test.describe('Vancouver Pacific Time App', () => {
   });
 
   test('full-year comparisons remain clearly distinguished from actual 2026 clock history', async ({ page }) => {
-    const note = page.locator('.scenario-note');
+    await expect(page.locator('.eyebrow')).toHaveCount(0);
+    await expect(page.locator('header')).not.toContainText('Policy checked');
+    const note = page.locator('footer .scenario-note');
     const chart = page.getByRole('img', { name: /Vancouver sunrise and sunset comparison/i });
     for (const [name, chartLabel] of [
       ['Pacific Time (PCT)', 'Pacific Time (PCT)'],

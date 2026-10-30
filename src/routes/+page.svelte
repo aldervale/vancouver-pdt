@@ -725,7 +725,6 @@
 
 <div class="container">
   <header>
-    <div class="eyebrow">B.C. · Policy checked October 24, 2026</div>
     <h1>No More Clock Changes<br />for Vancouver</h1>
     <p class="subtitle">
       Vancouver moved its clocks forward for the last time on March 8, 2026.
@@ -747,8 +746,6 @@
       Later evening light also means later winter sunrises, not an established health advantage over permanent standard time.
     </p>
   </section>
-  <p class="scenario-note">These full-year chart scenarios are comparisons, not Vancouver's actual January–December 2026 clock history.
-    Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.</p>
 
   <div class="controls-row">
     <div class="selector-row">
@@ -1228,6 +1225,8 @@
   </div>
 
   <footer>
+    <p class="scenario-note">These full-year chart scenarios are comparisons, not Vancouver's actual January–December 2026 clock history.
+      Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.</p>
     <div class="about-project">
       <strong>About BC Daylight</strong>
       <p>An independent, open-source comparison of Vancouver daylight under three clock systems. Created by Adam Stuckert. <a href="https://github.com/aldervale/vancouver-pdt" target="_blank" rel="noopener">Source code &amp; feedback</a> · <a href="https://github.com/aldervale/vancouver-pdt/blob/c95707ca05e70df11800536572a05a76d77577a3/README.md#data--methodology" target="_blank" rel="noopener">Data &amp; methodology</a>.</p>
@@ -1322,15 +1321,6 @@
   header {
     margin-bottom: 40px;
     max-width: 720px;
-  }
-
-  .eyebrow {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--accent-orange);
-    margin-bottom: 16px;
   }
 
   h1 {
