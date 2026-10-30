@@ -299,7 +299,9 @@
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement!.getBoundingClientRect();
     const W = rect.width;
-    const H = 420;
+    // The docked tour needs the chart fully above it. 420px cannot fit on a short phone.
+    const viewportH = window.innerHeight || 900;
+    const H = viewportH < 680 ? Math.max(220, Math.min(420, viewportH - 360)) : 420;
 
     canvas.width = W * dpr;
     canvas.height = H * dpr;
@@ -474,11 +476,18 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = TEXT_MUTED;
-    ctx.font = '600 12px "DM Sans"';
-    ctx.textAlign = 'right';
-    ctx.fillText(`WAKE ${formatHour(WAKE)}`, padLeft - 6, wakeY + 3);
-    ctx.fillText(`SLEEP ${formatHour(SLEEP)}`, padLeft - 6, sleepY + 3);
+    const labelBaselines: number[] = [];
+    const MIN_LABEL_GAP = 14;
+    function drawAxisLabel(text: string, baseline: number, font: string, force = false) {
+      if (!force && labelBaselines.some(y => Math.abs(y - baseline) < MIN_LABEL_GAP)) return;
+      ctx.fillStyle = TEXT_MUTED;
+      ctx.font = font;
+      ctx.textAlign = 'right';
+      ctx.fillText(text, padLeft - 6, baseline);
+      labelBaselines.push(baseline);
+    }
+    drawAxisLabel(`WAKE ${formatHour(WAKE)}`, wakeY + 3, '600 12px "DM Sans"', true);
+    drawAxisLabel(`SLEEP ${formatHour(SLEEP)}`, sleepY + 3, '600 12px "DM Sans"', true);
 
     // Sunrise curve
     ctx.strokeStyle = '#e76f51';
@@ -494,34 +503,29 @@
     traceCurveFwd(sunsetPts);
     ctx.stroke();
 
-    // Y-axis labels
-    ctx.font = '500 12px "DM Sans"';
-    ctx.textAlign = 'right';
+    // Y-axis labels. Wake and sleep are already placed, so nearby hours drop out
+    // when a short chart would otherwise stack 12px text on top of itself.
+    const yLabels = [];
     for (let h = 5; h <= 26; h++) {
       if (h === WAKE || h === SLEEP) continue;
-      const y = yPos(h);
+      const text = h === 12 ? 'NOON'
+        : h === 24 ? '12 AM'
+        : h === 25 ? '1 AM'
+        : h === 26 ? '2 AM'
+        : h < 12 ? `${h} AM`
+        : `${h - 12} PM`;
+      yLabels.push({ h, text });
+    }
+    yLabels.sort((a, b) => Number(b.h === 12 || b.h === 24) - Number(a.h === 12 || a.h === 24));
+    for (const { h, text } of yLabels) {
       if (h === 12) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('NOON', padLeft - 6, y + 3);
         ctx.strokeStyle = 'rgba(230, 237, 243, 0.06)';
         ctx.beginPath();
-        ctx.moveTo(padLeft, y);
-        ctx.lineTo(padLeft + chartW, y);
+        ctx.moveTo(padLeft, yPos(h));
+        ctx.lineTo(padLeft + chartW, yPos(h));
         ctx.stroke();
-      } else if (h === 24) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('12 AM', padLeft - 6, y + 3);
-      } else if (h === 25) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('1 AM', padLeft - 6, y + 3);
-      } else if (h === 26) {
-        ctx.fillStyle = TEXT_MUTED;
-        ctx.fillText('2 AM', padLeft - 6, y + 3);
-      } else {
-        ctx.fillStyle = TEXT_MUTED;
-        const label = h < 12 ? `${h} AM` : `${h - 12} PM`;
-        ctx.fillText(label, padLeft - 6, y + 3);
       }
+      drawAxisLabel(text, yPos(h) + 3, '500 12px "DM Sans"');
     }
 
     // X-axis: month labels at 1st of each month

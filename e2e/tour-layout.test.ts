@@ -15,7 +15,7 @@ test.afterEach(async ({ page }, testInfo) => {
   await testInfo.attach('tour-layout', { body: JSON.stringify(layout, null, 2), contentType: 'application/json' });
 });
 
-for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
   test(`tour keeps every target unobstructed at ${viewport.width}×${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.addInitScript(() => localStorage.setItem('vdt_tour_done', '1'));
