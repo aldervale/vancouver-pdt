@@ -3,6 +3,7 @@
   import SunCalc from 'suncalc';
   import { driver } from 'driver.js';
   import { trapTourFocus } from '$lib/tour-focus';
+  import RegionalClocks from '$lib/RegionalClocks.svelte';
   import 'driver.js/dist/driver.css';
 
   let canvas: HTMLCanvasElement;
@@ -721,7 +722,7 @@
 
 <div class="container">
   <header>
-    <div class="eyebrow">B.C. · Policy checked October 24, 2026</div>
+    <div class="eyebrow">B.C. · Policy checked October 28, 2026</div>
     <h1>No More Clock Changes<br />for Vancouver</h1>
     <p class="subtitle">
       Vancouver moved its clocks forward for the last time on March 8, 2026.
@@ -736,13 +737,15 @@
     <p>The <a href="https://news.gov.bc.ca/releases/2026CITZ0009-001073" target="_blank" rel="noopener">September 17 provincial announcement</a>
       introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions.
       Local mountain-time arrangements differ; see the province's
-      <a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">regional guidance</a>.
+      <a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">regional guidance</a>
+      and the <a href="#regional-clocks">before-and-after clock map</a>.
     </p>
     <p>Under <a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">current U.S. clock rules</a>,
-      Vancouver will be one hour ahead of Seattle after the November 1 fall-back and aligned during U.S. daylight time.
+      Vancouver will be one hour ahead of <a href="#regional-clocks">Seattle</a> after the November 1 fall-back and aligned during U.S. daylight time.
       Later evening light also means later winter sunrises, not an established health advantage over permanent standard time.
     </p>
   </section>
+  <RegionalClocks />
   <p class="scenario-note">These full-year chart scenarios are comparisons, not Vancouver's actual January–December 2026 clock history.
     Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.</p>
 
@@ -1251,13 +1254,23 @@
           <div class="references-col-label">B.C. Coverage</div>
           <ul class="references-list">
             <li><a href="https://news.gov.bc.ca/releases/2026CITZ0009-001073" target="_blank" rel="noopener">Official Pacific Time (PCT) announcement</a> — Government of B.C., September 17, 2026.</li>
-            <li><a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">Official year-round time and regional guidance</a> — Government of B.C., September 17, 2026.</li>
-            <li><a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">Current U.S. daylight saving time rules</a> — National Institute of Standards and Technology.</li>
+            <li id="ref-bc-dst"><a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">Official year-round time and regional guidance</a> — Government of B.C., published October 28, 2026.</li>
+            <li id="ref-nist"><a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">Current U.S. daylight saving time rules</a> — National Institute of Standards and Technology. In 2026 the fall-back is November 1 at 2 AM local time.</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/b-c-adopting-year-round-daylight-time-9.7111657" target="_blank" rel="noopener">Reactions mixed as B.C. ends time changes, adopts year-round daylight time</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/bc-permanent-daylight-saving-time-pacific-time-zone-clocks-9.7116954" target="_blank" rel="noopener">March 8 is the last time most British Columbians will change their clocks</a> — CBC News, Mar 2026</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/bc-clocks-changing-timeline-9.7112204" target="_blank" rel="noopener">A timeline of how B.C. got to Pacific time year-round</a> — CBC News, Mar 2026</li>
             <li><a href="https://dailyhive.com/vancouver/bc-permanent-daylight-saving-time" target="_blank" rel="noopener">You are my sunshine: B.C. inches closer to permanent Daylight Saving Time</a> — Daily Hive, Mar 2022</li>
             <li><a href="https://www.cbc.ca/news/canada/british-columbia/time-change-british-columbia-9.7112139" target="_blank" rel="noopener">People in northeast B.C. say rest of province should consider their experience</a> — CBC News, Mar 2026</li>
+          </ul>
+          <div class="references-col-label">Regional clocks</div>
+          <ul class="references-list">
+            <li id="ref-abt"><a href="https://www.alberta.ca/albertas-new-time-system-abt" target="_blank" rel="noopener">Alberta’s new time system (ABT)</a> — Government of Alberta. Alberta Time is UTC−6, and clocks stay there on November 1, 2026.</li>
+            <li id="ref-nwt"><a href="https://www.gov.nt.ca/en/newsroom/northwest-territories-ends-seasonal-time-change" target="_blank" rel="noopener">Northwest Territories ends seasonal time change</a> — Government of the Northwest Territories, September 23, 2026. Northwest Territories Time is UTC−6.</li>
+            <li id="ref-yukon"><a href="https://yukon.ca/en/your-government/about-yukon/learn-about-yukon-standard-time" target="_blank" rel="noopener">Learn about Yukon Standard Time</a> — Government of Yukon. The Yukon stays at UTC−7.</li>
+            <li id="ref-sk"><a href="https://www.saskatchewan.ca/government/municipal-administration/tools-guides-and-resources/saskatchewan-time-system" target="_blank" rel="noopener">Saskatchewan time system</a> — Government of Saskatchewan. Central Standard Time, UTC−6, year-round.</li>
+            <li id="ref-us-zones"><a href="https://www.ecfr.gov/current/title-49/subtitle-A/part-71" target="_blank" rel="noopener">Standard time zone boundaries, 49 CFR Part 71</a> — U.S. Code of Federal Regulations. Used for northern Idaho, Malheur County and Alaska.</li>
+            <li id="ref-creston"><a href="https://www.explorecrestonvalley.com/time-zone" target="_blank" rel="noopener">Time zone in the Creston Valley</a> — Creston Valley. Creston keeps mountain standard time, UTC−7, year-round.</li>
+            <li id="ref-map"><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth 1:50m cultural vectors</a> — public-domain provincial and state outlines. U.S. county lines are simplified from the <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">Census Bureau cartographic boundaries</a> (public domain).</li>
           </ul>
         </div>
         <div class="references-col">
@@ -2214,6 +2227,8 @@
     color: var(--text-muted);
     margin-bottom: 10px;
   }
+
+  .references-list + .references-col-label { margin-top: 22px; }
 
   .references-list {
     list-style: none;

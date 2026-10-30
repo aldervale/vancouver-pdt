@@ -371,8 +371,10 @@ describe('Current Pacific Time policy and model scope', () => {
     const { container } = render(Page);
     const note = container.querySelector('.scenario-note')!;
     const policy = container.querySelector('.policy-update')!;
+    const clocks = container.querySelector('#regional-clocks')!;
     const controls = container.querySelector('.controls-row')!;
-    expect(policy.nextElementSibling).toBe(note);
+    expect(policy.nextElementSibling).toBe(clocks);
+    expect(clocks.nextElementSibling).toBe(note);
     expect(note.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(note).toHaveTextContent('full-year chart scenarios are comparisons');
     expect(note).toHaveTextContent("not Vancouver's actual January–December 2026 clock history");

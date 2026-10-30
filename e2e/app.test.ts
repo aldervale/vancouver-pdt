@@ -255,7 +255,7 @@ test.describe('Vancouver Pacific Time App', () => {
     await page.keyboard.press('Tab');
     await expect(sources.getByRole('link').first()).toBeFocused();
     const references = page.locator('.references-list').getByRole('link');
-    await expect(references).toHaveCount(18);
+    await expect(references).toHaveCount(26);
     for (const link of await references.all()) {
       await expect(link).toHaveAttribute('href', /^https:\/\//);
       await expect(link).toHaveAttribute('rel', /noopener/);
