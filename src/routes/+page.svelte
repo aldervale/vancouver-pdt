@@ -748,7 +748,6 @@
       Later evening light also means later winter sunrises, not an established health advantage over permanent standard time.
     </p>
   </section>
-  <RegionalClocks />
 
   <div class="controls-row">
     <div class="selector-row">
@@ -1226,6 +1225,8 @@
       </div>
     </div>
   </div>
+
+  <RegionalClocks />
 
   <footer>
     <div class="about-project">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/svelte';
+import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import Page from '../+page.svelte';
 import { clockLabel, clockRegions, offsetLabel, regionChanges } from '$lib/clock-regions';
 
@@ -17,23 +17,49 @@ afterEach(() => {
 });
 
 describe('Regional clock map', () => {
-  it('sits between the policy note and the schedule controls', () => {
+  it('keeps a compact trigger above the footer instead of a map between the policy note and the controls', () => {
     const { container } = render(Page);
     const policy = container.querySelector('.policy-update')!;
     const clocks = container.querySelector('#regional-clocks')!;
     const controls = container.querySelector('.controls-row')!;
+    const footer = container.querySelector('footer')!;
+    const dialog = container.querySelector('#regional-clocks-dialog') as HTMLDialogElement;
+    const trigger = clocks.querySelector('button')!;
     expect(container.querySelector('.eyebrow')).toBeNull();
-    expect(policy.nextElementSibling).toBe(clocks);
-    expect(clocks.nextElementSibling).toBe(controls);
+    expect(policy.nextElementSibling).toBe(controls);
+    expect(clocks.nextElementSibling).toBe(footer);
+    expect(dialog.open).toBe(false);
+    expect(dialog.style.display).toBe('none');
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(trigger).toHaveAttribute('command', 'show-modal');
+    expect(trigger).toHaveAttribute('commandfor', 'regional-clocks-dialog');
+    expect(trigger.textContent).toContain('See the map: what time it is across the West on Oct 31 vs Nov 1');
+    expect(trigger.textContent).toContain('See the map: Oct 31 vs Nov 1');
+    expect(trigger).toHaveAccessibleName(/See the map/);
     expect(policy).toHaveTextContent('before-and-after clock map');
     const mapLinks = [...policy.querySelectorAll('a[href="#regional-clocks"]')].map((link) => link.textContent);
     expect(mapLinks).toEqual(['before-and-after clock map', 'Seattle']);
   });
 
+  it('opens the map dialog from the trigger and from the policy links', async () => {
+    const { container } = render(Page);
+    const dialog = container.querySelector('#regional-clocks-dialog') as HTMLDialogElement;
+    const trigger = container.querySelector('#regional-clocks button')!;
+    await fireEvent.click(trigger);
+    expect(dialog.open).toBe(true);
+    dialog.open = false;
+    const link = container.querySelector('.policy-update a[href="#regional-clocks"]')!;
+    await fireEvent.click(link);
+    expect(dialog.open).toBe(true);
+    expect(dialog.querySelector('table')).toBeTruthy();
+    expect(dialog.getAttribute('aria-labelledby')).toBe('regional-clocks-title');
+    expect(dialog.querySelector('.dialog-close')).toHaveAttribute('aria-label', 'Close map');
+  });
+
   it('renders a text alternative and the same before/after rows without needing the toggle', () => {
     const { container } = render(Page);
     const section = container.querySelector('#regional-clocks')!;
-    const svg = section.querySelector('svg')!;
+    const svg = section.querySelector('svg[role="img"]')!;
     expect(svg).toHaveAttribute('role', 'img');
     expect(svg.querySelector('desc')?.textContent).toMatch(/Striped places are the ones that fall back/);
     expect(section.querySelector('#clock-oct31')).toBeChecked();

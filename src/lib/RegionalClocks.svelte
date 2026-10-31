@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { alaskaInsetPath, alaskaViewBox, clockMapAnchors, clockMapMarkers, clockMapPaths, clockMapViewBox } from '$lib/clock-map-paths';
   import {
     clockLabel,
@@ -47,7 +48,109 @@
     if (id === 'california') return 'Calif.';
     return regionById[id].short;
   }
+
+  let dialogEl: HTMLDialogElement | undefined = $state();
+
+  function supportsCommandInvoker() {
+    return typeof HTMLButtonElement !== 'undefined' && 'commandForElement' in HTMLButtonElement.prototype;
+  }
+
+  function revealDialog() {
+    if (dialogEl) dialogEl.style.display = '';
+  }
+
+  function syncScrollLock(open: boolean) {
+    document.documentElement.classList.toggle('clock-dialog-open', open);
+  }
+
+  function openDialog() {
+    const dialog = dialogEl;
+    if (!dialog || dialog.open) return;
+    revealDialog();
+    try {
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+      else dialog.setAttribute('open', '');
+    } catch {
+      dialog.setAttribute('open', '');
+    }
+    syncScrollLock(Boolean(dialog.open));
+  }
+
+  function onTriggerClick(event: MouseEvent) {
+    // Browsers that support invoker commands open the dialog after this click.
+    // preventDefault would cancel that, and calling showModal as well throws.
+    if (supportsCommandInvoker()) {
+      revealDialog();
+      queueMicrotask(() => {
+        if (dialogEl?.open) syncScrollLock(true);
+      });
+      return;
+    }
+    event.preventDefault();
+    openDialog();
+  }
+
+  function onDocumentClick(event: MouseEvent) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const link = target.closest('a[href="#regional-clocks"]');
+    if (!link) return;
+    event.preventDefault();
+    openDialog();
+  }
+
+  function onDialogClick(event: MouseEvent) {
+    if (event.target === dialogEl) {
+      dialogEl?.close();
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('a[href^="#ref-"]')) dialogEl?.close();
+  }
+
+  function onDialogToggle(event: Event) {
+    const open = 'newState' in event ? (event as ToggleEvent).newState === 'open' : Boolean(dialogEl?.open);
+    syncScrollLock(open);
+    if (!dialogEl) return;
+    if (open) revealDialog();
+    else dialogEl.style.display = 'none';
+  }
+
+  function onDialogKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Tab' || !dialogEl?.open) return;
+    const dialog = dialogEl;
+    const focusable = [...dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')]
+      .filter((el) => {
+        if (el.tabIndex < 0) return false;
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        return el.getClientRects().length > 0;
+      });
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || !dialog.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function onDialogClose() {
+    syncScrollLock(false);
+    if (dialogEl) dialogEl.style.display = 'none';
+  }
+
+  onMount(() => () => {
+    document.documentElement.classList.remove('clock-dialog-open');
+  });
 </script>
+
+<svelte:document onclick={onDocumentClick} />
 
 {#snippet hatchDefs(suffix: string, size = 7)}
   <defs>
@@ -134,8 +237,54 @@
   </figure>
 {/snippet}
 
-<section class="regional-clocks" id="regional-clocks" aria-labelledby="regional-clocks-title">
-  <h2 id="regional-clocks-title">When it's 10:00 AM in Vancouver</h2>
+<div class="clock-map-entry" id="regional-clocks">
+  <button
+    type="button"
+    class="clock-map-trigger"
+    command="show-modal"
+    commandfor="regional-clocks-dialog"
+    aria-haspopup="dialog"
+    aria-controls="regional-clocks-dialog"
+    onclick={onTriggerClick}
+  >
+    <svg class="trigger-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <circle cx="12" cy="12" r="7.25" fill="none" stroke="currentColor" stroke-width="1.75" />
+      <path d="M12 8.5V12.2l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span class="trigger-label">
+      <span class="label-long">See the map: what time it is across the West on Oct 31 vs Nov 1</span>
+      <span class="label-short">See the map: Oct 31 vs Nov 1</span>
+    </span>
+    <svg class="trigger-chevron" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </button>
+
+  <dialog
+    id="regional-clocks-dialog"
+    class="clock-dialog"
+    aria-labelledby="regional-clocks-title"
+    closedby="any"
+    style="display: none"
+    bind:this={dialogEl}
+    ontoggle={onDialogToggle}
+    onclose={onDialogClose}
+    onkeydown={onDialogKeydown}
+    onclick={onDialogClick}
+  >
+    <div class="regional-clocks">
+      <div class="dialog-bar">
+        <span class="dialog-bar-spacer" aria-hidden="true"></span>
+        <h2 id="regional-clocks-title">When it's 10:00 AM in Vancouver</h2>
+        <form method="dialog" class="dialog-close-form">
+          <button type="submit" class="dialog-close" aria-label="Close map">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path d="M3.2 3.2 12.8 12.8M12.8 3.2 3.2 12.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+          </button>
+        </form>
+      </div>
+      <div class="dialog-body">
   <p class="clock-lede">
     Same moment, two mornings. 10:00 AM in Vancouver is 17:00 UTC.
     On October 31 the U.S. Pacific coast still agrees with that hour.
@@ -232,27 +381,172 @@
     <a href="#ref-nist">NIST date</a> already cited below.
     Nunavut spans more than one time zone and is not shown. The western Aleutians are cropped.
   </p>
-</section>
+      </div>
+    </div>
+  </dialog>
+</div>
 
 <style>
-  .regional-clocks {
-    position: relative;
-    margin: 0 0 16px;
-    padding: 18px clamp(12px, 3vw, 20px) 16px;
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    background: var(--card-bg);
+  .clock-map-entry {
+    margin-top: 36px;
     scroll-margin-top: 16px;
   }
 
-  h2 {
+  .clock-map-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 8px 12px;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    background: #121820;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    appearance: none;
+    transition: border-color 160ms ease, color 160ms ease;
+  }
+
+  .clock-map-trigger:hover {
+    border-color: var(--accent-gold);
+    color: #f5f0e8;
+  }
+
+  .clock-map-trigger:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 3px;
+  }
+
+  .trigger-icon,
+  .trigger-chevron {
+    flex: none;
+    color: var(--accent-gold);
+  }
+
+  .trigger-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .label-short { display: none; }
+
+  .regional-clocks {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .dialog-bar {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid #30363d;
+    background: var(--card-bg);
+  }
+
+  .dialog-bar h2 {
+    grid-column: 2;
+    margin: 0;
+    text-align: center;
     font-family: 'Playfair Display', serif;
     font-weight: 900;
-    font-size: clamp(26px, 4.4vw, 40px);
-    line-height: 1.12;
+    font-size: clamp(17px, 2.2vw, 26px);
+    line-height: 1.15;
     letter-spacing: -0.02em;
     color: #f5f0e8;
-    margin: 0 0 10px;
+  }
+
+  .dialog-close-form { grid-column: 3; }
+
+  .dialog-close {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid #30363d;
+    border-radius: 50%;
+    background: #0d1117;
+    color: #f5f0e8;
+    cursor: pointer;
+  }
+
+  .dialog-close:hover {
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+  }
+
+  .dialog-close:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+  }
+
+  .dialog-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 14px clamp(12px, 2vw, 18px) 16px;
+  }
+
+  :global(dialog.clock-dialog[open]) {
+    display: flex !important;
+    flex-direction: column;
+    width: min(1040px, calc(100vw - 24px));
+    height: min(880px, calc(100dvh - 24px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    margin: auto;
+    padding: 0;
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+  }
+
+  :global(dialog.clock-dialog::backdrop) {
+    background: rgba(6, 8, 12, 0.72);
+  }
+
+  :global(html.clock-dialog-open) {
+    overflow: hidden;
+  }
+
+  @media (max-width: 719px) {
+    .label-long { display: none; }
+    .label-short { display: inline; }
+  }
+
+  @media (max-width: 359px) {
+    .clock-map-trigger {
+      font-size: 13.5px;
+      padding: 8px 10px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    :global(dialog.clock-dialog[open]) {
+      width: calc(100vw - 12px);
+      height: calc(100dvh - 12px);
+      max-height: calc(100dvh - 12px);
+      border-radius: 14px;
+    }
   }
 
   .clock-lede {
@@ -565,7 +859,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .zone { transition: none; }
+    .zone, .clock-map-trigger { transition: none; }
   }
 </style>
 
