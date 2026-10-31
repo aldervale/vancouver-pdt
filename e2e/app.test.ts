@@ -63,12 +63,11 @@ test.describe('Vancouver Pacific Time App', () => {
     await expect(page.locator('.chart-subtitle')).toContainText('Pacific Time (PCT)');
   });
 
-  test('the policy card is two sentences, with the supporting notes in the footer', async ({ page }) => {
-    const policy = page.getByRole('region', { name: 'What to know about Pacific Time' });
-    await expect(policy).toBeVisible();
-    await expect(policy.locator('p')).toHaveCount(1);
-    await expect(policy.locator('p')).toHaveText("Vancouver won't turn its clocks back on November 1. That means later winter sunrises and sunsets, and one hour ahead of Seattle.");
-    await expect(policy.locator('a')).toHaveCount(0);
+  test('the Pacific Time card is gone and the supporting notes stay in the footer', async ({ page }) => {
+    await expect(page.getByRole('region', { name: 'What to know about Pacific Time' })).toHaveCount(0);
+    await expect(page.locator('.policy-update')).toHaveCount(0);
+    await expect(page.getByText("Vancouver won't turn its clocks back on November 1")).toHaveCount(0);
+    await expect(page.getByText('later winter sunrises and sunsets, and one hour ahead of Seattle')).toHaveCount(0);
     const credit = page.locator('footer .footer-credit');
     await expect(credit).toContainText('introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions');
     await expect(credit).toContainText('Local mountain-time arrangements differ');
