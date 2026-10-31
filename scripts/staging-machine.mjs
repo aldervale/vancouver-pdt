@@ -827,3 +827,20 @@ export function isSafeConfigPath(filePath) {
     /^\/[\w./@+-]+$/.test(filePath)
   );
 }
+
+/** Missing optional roots are normal in minimal images; real discovery errors are fatal. */
+export function gatewayDiscoveryCommand(roots = ['/infra', '/etc', '/opt', '/app', '/usr/local/etc', '/srv']) {
+  if (!Array.isArray(roots) || roots.length === 0 || roots.some((root) => !isSafeConfigPath(root))) {
+    throw new Error('Invalid gateway discovery roots');
+  }
+  return [
+    'set -e',
+    'ps -eo args=',
+    "printf '\\n'",
+    `for root in ${roots.map((root) => `'${root}'`).join(' ')}; do`,
+    '  if [ -d "$root" ]; then',
+    '    find "$root" -type f \\( -iname "*oauth2*" -o -name supervisord.conf -o -name oauth2-proxy.cfg \\) -size -256k',
+    '  fi',
+    'done'
+  ].join('\n');
+}

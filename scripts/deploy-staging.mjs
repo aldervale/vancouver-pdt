@@ -24,6 +24,7 @@ import {
   assertStagingOrigin,
   collectSkipRoutes,
   configPathsFromProcessList,
+  gatewayDiscoveryCommand,
   isSafeConfigPath,
   mergeSkipRoutes,
   parseEnvFile,
@@ -204,7 +205,7 @@ async function readGatewayConfigFiles(machineId) {
     listing = await execMachine(machineId, [
       'sh',
       '-c',
-      'ps -eo args=; echo; find /etc /opt /app /usr/local/etc /srv -type f \\( -iname "*oauth2*" -o -name supervisord.conf -o -name oauth2-proxy.cfg \\) -size -256k 2>/dev/null'
+      gatewayDiscoveryCommand()
     ]);
   } catch (error) {
     return [
