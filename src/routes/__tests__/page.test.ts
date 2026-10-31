@@ -80,10 +80,10 @@ describe('Page renders', () => {
     expect(h1!.textContent).toContain('No More Clock Changes');
   });
 
-  it('omits the redundant policy-check eyebrow', () => {
+  it('does not show the policy-check line above the title', () => {
     const { container } = render(Page);
-    const eyebrow = container.querySelector('.eyebrow');
-    expect(eyebrow).toBeNull();
+    expect(container.querySelector('.eyebrow')).toBeNull();
+    expect(container.querySelector('header')?.textContent).not.toMatch(/Policy checked/i);
   });
 });
 
@@ -345,37 +345,55 @@ describe('Current Pacific Time policy and model scope', () => {
     expect(subtitle).not.toHaveTextContent(/is adopting|what.s coming/i);
   });
 
-  it('presents the September policy update, regional exceptions and official U.S. assumptions', () => {
-    render(Page);
+  it('keeps the policy card to two sentences and moves the supporting notes below', () => {
+    const { container } = render(Page);
     const policy = screen.getByRole('region', { name: 'What to know about Pacific Time' });
-    expect(policy).toHaveTextContent('September 17');
-    expect(policy).toHaveTextContent(/mountain-time arrangements differ/i);
-    expect(policy).toHaveTextContent('one hour ahead of Seattle after the November 1 fall-back');
-    expect(policy).toHaveTextContent('aligned during U.S. daylight time');
-    expect(policy).toHaveTextContent('not an established health advantage over permanent standard time');
-    const sources = [
+    const body = policy.querySelector('p')!;
+    expect(policy.querySelectorAll('p')).toHaveLength(1);
+    expect(policy.querySelectorAll('a')).toHaveLength(0);
+    expect(body.textContent?.trim()).toBe("Vancouver won't turn its clocks back on November 1. That means later winter sunrises and sunsets, and one hour ahead of Seattle.");
+    expect(body.textContent?.trim().split(/(?<=\.)\s+/)).toHaveLength(2);
+
+    const credit = container.querySelector('.footer-credit')!;
+    expect(credit).toHaveTextContent('introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions');
+    expect(credit).toHaveTextContent('Local mountain-time arrangements differ');
+    expect(credit).toHaveTextContent('one hour ahead of Seattle after the November 1 fall-back');
+    expect(credit).toHaveTextContent('aligned during U.S. daylight time');
+    expect(credit).toHaveTextContent('Later evening light means later winter sunrises, not an established health advantage over permanent standard time');
+    const moved = [
       ['September 17 provincial announcement', 'https://news.gov.bc.ca/releases/2026CITZ0009-001073'],
       ['regional guidance', 'https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time'],
       ['current U.S. clock rules', 'https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst'],
+      ['before-and-after clock map', '#regional-clocks'],
+      ['Seattle', '#regional-clocks'],
     ];
-    for (const [name, href] of sources) {
-      const link = screen.getByRole('link', { name });
-      expect(policy.contains(link)).toBe(true);
+    for (const [name, href] of moved) {
+      const link = screen.getByRole('link', { name, exact: true });
+      expect(credit.contains(link)).toBe(true);
       expect(link).toHaveAttribute('href', href);
-      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+      if (href.startsWith('http')) expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
     }
+    expect(container.querySelectorAll('.references-list a[href="https://news.gov.bc.ca/releases/2026CITZ0009-001073"]')).toHaveLength(1);
+    expect(container.querySelectorAll('.references-list a[href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time"]')).toHaveLength(1);
+    expect(container.querySelectorAll('.references-list a[href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst"]')).toHaveLength(1);
   });
 
-  it('keeps the full-year scenario caveat in bottom notes and distinguishes actual 2026 history', () => {
+  it('keeps the full-year history caveat in the notes, not above the chart', () => {
     const { container } = render(Page);
-    const note = container.querySelector('.scenario-note')!;
+    expect(container.querySelector('.scenario-note')).toBeNull();
+    expect(container.textContent).not.toContain('These full-year');
+    const policy = container.querySelector('.policy-update')!;
+    const clocks = container.querySelector('#regional-clocks')!;
     const controls = container.querySelector('.controls-row')!;
-    expect(note.closest('footer')).toBeTruthy();
-    expect(controls.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(note).toHaveTextContent('full-year chart scenarios are comparisons');
-    expect(note).toHaveTextContent("not Vancouver's actual January–December 2026 clock history");
-    expect(note).toHaveTextContent('Vancouver used PST until the March 8 clock change, including January and February');
-    expect(note).toHaveTextContent('not an IANA time-zone identifier');
+    expect(policy.nextElementSibling).toBe(controls);
+    expect(clocks.nextElementSibling).toBe(container.querySelector('footer'));
+    expect(clocks.querySelector('dialog')).not.toHaveAttribute('open');
+    const dataNote = [...container.querySelectorAll('details')].find((details) => details.textContent?.includes('What data is this?'));
+    expect(dataNote).toHaveTextContent('full-year clock-system comparisons');
+    expect(dataNote).toHaveTextContent("not Vancouver's actual 2026 clock history");
+    const credit = container.querySelector('.footer-credit')!;
+    expect(credit).toHaveTextContent('Vancouver used PST until the March 8 clock change, including January and February');
+    expect(credit).toHaveTextContent('not an IANA time-zone identifier');
   });
 
   it('updates the accessible chart label with the selected comparison', async () => {
@@ -604,3 +622,4 @@ function contrastRatio(foreground: string, background: string) {
   const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
+

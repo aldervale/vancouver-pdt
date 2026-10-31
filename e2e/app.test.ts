@@ -63,32 +63,44 @@ test.describe('Vancouver Pacific Time App', () => {
     await expect(page.locator('.chart-subtitle')).toContainText('Pacific Time (PCT)');
   });
 
-  test('the current policy update links official B.C. and U.S. guidance', async ({ page }) => {
+  test('the policy card is two sentences, with the supporting notes in the footer', async ({ page }) => {
     const policy = page.getByRole('region', { name: 'What to know about Pacific Time' });
     await expect(policy).toBeVisible();
-    await expect(policy).toContainText('September 17');
-    await expect(policy).toContainText('PCT abbreviation for Pacific Time');
-    await expect(policy).toContainText('Local mountain-time arrangements differ');
-    await expect(policy).toContainText('one hour ahead of Seattle after the November 1 fall-back');
-    await expect(policy).toContainText('aligned during U.S. daylight time');
-    await expect(policy).toContainText('not an established health advantage over permanent standard time');
+    await expect(policy.locator('p')).toHaveCount(1);
+    await expect(policy.locator('p')).toHaveText("Vancouver won't turn its clocks back on November 1. That means later winter sunrises and sunsets, and one hour ahead of Seattle.");
+    await expect(policy.locator('a')).toHaveCount(0);
+    const credit = page.locator('footer .footer-credit');
+    await expect(credit).toContainText('introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions');
+    await expect(credit).toContainText('Local mountain-time arrangements differ');
+    await expect(credit).toContainText('one hour ahead of Seattle after the November 1 fall-back');
+    await expect(credit).toContainText('aligned during U.S. daylight time');
+    await expect(credit).toContainText('Later evening light means later winter sunrises, not an established health advantage over permanent standard time');
     for (const [name, href] of [
       ['September 17 provincial announcement', 'https://news.gov.bc.ca/releases/2026CITZ0009-001073'],
       ['regional guidance', 'https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time'],
       ['current U.S. clock rules', 'https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst'],
+      ['before-and-after clock map', '#regional-clocks'],
+      ['Seattle', '#regional-clocks'],
     ]) {
-      const link = policy.getByRole('link', { name, exact: true });
+      const link = credit.getByRole('link', { name, exact: true });
       await expect(link).toHaveAttribute('href', href);
-      await expect(link).toHaveAttribute('rel', /noopener/);
+      if (href.startsWith('http')) await expect(link).toHaveAttribute('rel', /noopener/);
     }
     await expect(page.locator('.subtitle')).toContainText('Pacific time (PCT, UTC−7)');
     await expect(page.locator('.subtitle')).toContainText('will not fall back on November 1');
   });
 
   test('full-year comparisons remain clearly distinguished from actual 2026 clock history', async ({ page }) => {
+    await expect(page.locator('.scenario-note')).toHaveCount(0);
     await expect(page.locator('.eyebrow')).toHaveCount(0);
-    await expect(page.locator('header')).not.toContainText('Policy checked');
-    const note = page.locator('footer .scenario-note');
+    await expect(page.getByText('These full-year')).toHaveCount(0);
+    const dataNote = page.locator('details').filter({ hasText: 'What data is this?' });
+    await dataNote.locator('summary').click();
+    await expect(dataNote).toContainText('full-year clock-system comparisons');
+    await expect(dataNote).toContainText("not Vancouver's actual 2026 clock history");
+    const credit = page.locator('.footer-credit');
+    await expect(credit).toContainText('Vancouver used PST until the March 8 clock change, including January and February');
+    await expect(credit).toContainText('not an IANA time-zone identifier');
     const chart = page.getByRole('img', { name: /Vancouver sunrise and sunset comparison/i });
     for (const [name, chartLabel] of [
       ['Pacific Time (PCT)', 'Pacific Time (PCT)'],
@@ -96,11 +108,6 @@ test.describe('Vancouver Pacific Time App', () => {
       ['Permanent PST', 'permanent PST'],
     ]) {
       await page.locator('.mode-toggle').getByRole('button', { name, exact: true }).click();
-      await expect(note).toBeVisible();
-      await expect(note).toContainText('full-year chart scenarios are comparisons');
-      await expect(note).toContainText("not Vancouver's actual January–December 2026 clock history");
-      await expect(note).toContainText('Vancouver used PST until the March 8 clock change, including January and February');
-      await expect(note).toContainText('not an IANA time-zone identifier');
       await expect(chart).toHaveAccessibleName(`Vancouver sunrise and sunset comparison under ${chartLabel}; summary values below`);
     }
   });
@@ -257,7 +264,7 @@ test.describe('Vancouver Pacific Time App', () => {
     await page.keyboard.press('Tab');
     await expect(sources.getByRole('link').first()).toBeFocused();
     const references = page.locator('.references-list').getByRole('link');
-    await expect(references).toHaveCount(18);
+    await expect(references).toHaveCount(28);
     for (const link of await references.all()) {
       await expect(link).toHaveAttribute('href', /^https:\/\//);
       await expect(link).toHaveAttribute('rel', /noopener/);
@@ -673,3 +680,4 @@ test.describe('Guided tour', () => {
     });
   }
 });
+
