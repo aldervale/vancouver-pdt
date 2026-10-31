@@ -75,9 +75,9 @@ npm run test:e2e     # end-to-end tests (Playwright)
 
 ## Deploy
 
-The app uses `@sveltejs/adapter-node`. The repository's `fly.toml` targets production, not staging. Production deployment requires the owner's final review.
+The app uses `@sveltejs/adapter-node`. The repository's `fly.toml` targets production app `vancouver-pdt` ([bcdaylight.ca](https://bcdaylight.ca)). Production stays a manual `fly deploy` and is not part of the staging workflow.
 
-Staging uses a separate, authenticated Fly app with its own deployment configuration and gateway. Preserve that gateway and existing private assets when deploying a review build. Do not use the repository's default `fly deploy` command for staging.
+Staging is Fly app `bcdaylight-staging` at [bc-daylight.staging.adamstuckert.com](https://bc-daylight.staging.adamstuckert.com). Pushing the tested commit to the `staging` branch deploys that app only. The workflow keeps the gateway already running there and copies the new site build over `/app/build`. See [docs/staging.md](docs/staging.md).
 
 ---
 
