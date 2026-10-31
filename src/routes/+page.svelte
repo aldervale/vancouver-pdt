@@ -737,7 +737,7 @@
 
   <section class="policy-update" aria-labelledby="policy-update-title">
     <h2 id="policy-update-title">What to know about Pacific Time</h2>
-    <p>B.C. stays on Pacific Time (PCT, UTC−7) all year, so clocks don't fall back on November 1. This winter, Vancouver is <a href="#regional-clocks">an hour ahead of Seattle</a>.</p>
+    <p>Vancouver won't turn its clocks back on November 1. That means later winter sunrises and sunsets, and one hour ahead of Seattle.</p>
   </section>
 
   <div class="controls-row">
@@ -1290,9 +1290,11 @@
       Sunrise/sunset computed with <a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener">SunCalc</a>
       for Vancouver (49.28°N, 123.12°W), daily values for 2026.
       Waking window is user-configurable above.
-      Vancouver's transition to year-round UTC−7 began March 8, 2026; the PCT abbreviation was announced September 17, 2026.
+      Vancouver's transition to year-round UTC−7 began March 8, 2026.
+      The <a href="https://news.gov.bc.ca/releases/2026CITZ0009-001073" target="_blank" rel="noopener">September 17 provincial announcement</a> introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions.
       Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.
-      Local mountain-time arrangements differ; see the province's <a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">regional guidance</a>.
+      Local mountain-time arrangements differ; see the province's <a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">regional guidance</a> and the <a href="#regional-clocks">before-and-after clock map</a>.
+      Under <a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">current U.S. clock rules</a>, Vancouver is one hour ahead of <a href="#regional-clocks">Seattle</a> after the November 1 fall-back and aligned during U.S. daylight time.
       Later evening light means later winter sunrises, not an established health advantage over permanent standard time.
     </div>
   </footer>
@@ -1365,7 +1367,6 @@
   }
 
   .policy-update h2 { font-size: 17px; margin: 0 0 8px; }
-  .policy-update a { color: var(--accent-gold); text-decoration: underline; }
 
   /* ─── Controls row ───────────────────────────────────── */
 

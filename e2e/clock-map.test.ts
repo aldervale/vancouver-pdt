@@ -157,16 +157,22 @@ test.describe('Regional clock map', () => {
     });
   }
 
-  test('policy link opens the map dialog', async ({ page }) => {
+  test('footer notes links open the map dialog', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto('/');
-    const seattle = page.getByRole('region', { name: 'What to know about Pacific Time' }).getByRole('link', { name: 'an hour ahead of Seattle', exact: true });
-    await seattle.click();
+    const notes = page.locator('footer .footer-credit');
+    const mapLink = notes.getByRole('link', { name: 'before-and-after clock map', exact: true });
+    await mapLink.click();
     const dialog = page.locator('#regional-clocks-dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('img', { name: /Clocks around B.C./ }).first()).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
+    await expect(mapLink).toBeFocused();
+    const seattle = notes.getByRole('link', { name: 'Seattle', exact: true });
+    await seattle.click();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(seattle).toBeFocused();
   });
 

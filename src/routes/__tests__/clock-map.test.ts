@@ -36,19 +36,20 @@ describe('Regional clock map', () => {
     expect(trigger.textContent).toContain('See the map: what time it is across the West on Oct 31 vs Nov 1');
     expect(trigger.textContent).toContain('See the map: Oct 31 vs Nov 1');
     expect(trigger).toHaveAccessibleName(/See the map/);
-    expect(policy).toHaveTextContent('an hour ahead of Seattle');
-    const mapLinks = [...policy.querySelectorAll('a[href="#regional-clocks"]')].map((link) => link.textContent);
-    expect(mapLinks).toEqual(['an hour ahead of Seattle']);
+    expect(policy.querySelectorAll('a')).toHaveLength(0);
+    const notes = container.querySelector('footer .footer-credit')!;
+    const mapLinks = [...notes.querySelectorAll('a[href="#regional-clocks"]')].map((link) => link.textContent);
+    expect(mapLinks).toEqual(['before-and-after clock map', 'Seattle']);
   });
 
-  it('opens the map dialog from the trigger and from the policy links', async () => {
+  it('opens the map dialog from the trigger and from the notes links', async () => {
     const { container } = render(Page);
     const dialog = container.querySelector('#regional-clocks-dialog') as HTMLDialogElement;
     const trigger = container.querySelector('#regional-clocks button')!;
     await fireEvent.click(trigger);
     expect(dialog.open).toBe(true);
     dialog.open = false;
-    const link = container.querySelector('.policy-update a[href="#regional-clocks"]')!;
+    const link = container.querySelector('footer .footer-credit a[href="#regional-clocks"]')!;
     await fireEvent.click(link);
     expect(dialog.open).toBe(true);
     expect(dialog.querySelector('table')).toBeTruthy();
