@@ -1,0 +1,110 @@
+name: Deploy staging
+
+# Deploys Fly app bcdaylight-staging only. The production app is not a target.
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to test and deploy (branch, tag, or full commit SHA)
+        required: false
+        default: staging
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-bcdaylight-staging
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test the resolved commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Pin the tested commit
+        id: pin
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Testing $sha"
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --workers=2
+
+  deploy:
+    name: Deploy bcdaylight-staging
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.test.outputs.sha }}
+          persist-credentials: false
+      - name: Refuse any commit other than the tested SHA
+        env:
+          TESTED_SHA: ${{ needs.test.outputs.sha }}
+        run: |
+          set -euo pipefail
+          actual=$(git rev-parse HEAD)
+          if [ "$actual" != "$TESTED_SHA" ]; then
+            echo "checked out $actual, tested commit is $TESTED_SHA" >&2
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build with the tested commit baked into /version
+        env:
+          COMMIT_SHA: ${{ needs.test.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$COMMIT_SHA" != "$(git rev-parse HEAD)" ]; then
+            echo "COMMIT_SHA does not match the checkout" >&2
+            exit 1
+          fi
+          npm run build
+          grep -R -a -q "\"$COMMIT_SHA\"" build
+      - name: Deploy the overlay to bcdaylight-staging
+        id: deploy
+        env:
+          FLY_API_TOKEN_STAGING: ${{ secrets.FLY_API_TOKEN_STAGING }}
+          COMMIT_SHA: ${{ needs.test.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FLY_API_TOKEN_STAGING}" ]; then
+            echo "GitHub secret FLY_API_TOKEN_STAGING is not set" >&2
+            exit 1
+          fi
+          node scripts/deploy-staging.mjs
+      - name: Check the staging gateway
+        id: check
+        env:
+          STAGING_BASE_URL: https://bc-daylight.staging.adamstuckert.com
+          EXPECTED_SHA: ${{ needs.test.outputs.sha }}
+        run: node scripts/check-staging.mjs
+      - name: Roll back bcdaylight-staging if the gateway check failed
+        if: failure() && steps.deploy.outcome == 'success' && steps.check.outcome == 'failure'
+        env:
+          FLY_API_TOKEN_STAGING: ${{ secrets.FLY_API_TOKEN_STAGING }}
+        run: node scripts/deploy-staging.mjs --rollback
