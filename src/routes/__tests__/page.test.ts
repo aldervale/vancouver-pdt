@@ -345,14 +345,12 @@ describe('Current Pacific Time policy and model scope', () => {
     expect(subtitle).not.toHaveTextContent(/is adopting|what.s coming/i);
   });
 
-  it('keeps the policy card to two sentences and moves the supporting notes below', () => {
+  it('keeps the supporting Pacific Time notes in the footer and omits the policy card', () => {
     const { container } = render(Page);
-    const policy = screen.getByRole('region', { name: 'What to know about Pacific Time' });
-    const body = policy.querySelector('p')!;
-    expect(policy.querySelectorAll('p')).toHaveLength(1);
-    expect(policy.querySelectorAll('a')).toHaveLength(0);
-    expect(body.textContent?.trim()).toBe("Vancouver won't turn its clocks back on November 1. That means later winter sunrises and sunsets, and one hour ahead of Seattle.");
-    expect(body.textContent?.trim().split(/(?<=\.)\s+/)).toHaveLength(2);
+    expect(screen.queryByRole('region', { name: 'What to know about Pacific Time' })).toBeNull();
+    expect(container.querySelector('.policy-update')).toBeNull();
+    expect(container.textContent).not.toContain("Vancouver won't turn its clocks back on November 1");
+    expect(container.textContent).not.toContain('later winter sunrises and sunsets, and one hour ahead of Seattle');
 
     const credit = container.querySelector('.footer-credit')!;
     expect(credit).toHaveTextContent('introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions');
@@ -381,11 +379,11 @@ describe('Current Pacific Time policy and model scope', () => {
   it('keeps the full-year history caveat in the notes, not above the chart', () => {
     const { container } = render(Page);
     expect(container.querySelector('.scenario-note')).toBeNull();
+    expect(container.querySelector('.policy-update')).toBeNull();
     expect(container.textContent).not.toContain('These full-year');
-    const policy = container.querySelector('.policy-update')!;
     const clocks = container.querySelector('#regional-clocks')!;
     const controls = container.querySelector('.controls-row')!;
-    expect(policy.nextElementSibling).toBe(controls);
+    expect(container.querySelector('header')?.nextElementSibling).toBe(controls);
     expect(clocks.nextElementSibling).toBe(container.querySelector('footer'));
     expect(clocks.querySelector('dialog')).not.toHaveAttribute('open');
     const dataNote = [...container.querySelectorAll('details')].find((details) => details.textContent?.includes('What data is this?'));

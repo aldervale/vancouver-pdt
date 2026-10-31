@@ -24,12 +24,13 @@ test.describe('Regional clock map', () => {
       await expect(page.locator('.map-card').first()).toBeHidden();
       const placedLow = await page.evaluate(() => {
         const nodes = [
-          document.querySelector('.policy-update'),
+          document.querySelector('header'),
           document.querySelector('.controls-row'),
           document.querySelector('#regional-clocks'),
           document.querySelector('footer'),
         ];
-        return nodes.every((node, index) => Boolean(node) && (index === 0 || (nodes[index - 1]!.compareDocumentPosition(node!) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0));
+        return document.querySelector('.policy-update') === null
+          && nodes.every((node, index) => Boolean(node) && (index === 0 || (nodes[index - 1]!.compareDocumentPosition(node!) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0));
       });
       expect(placedLow).toBe(true);
 

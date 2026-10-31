@@ -735,11 +735,6 @@
     <button class="tour-launch" onclick={startTour}>Take a quick tour</button>
   </header>
 
-  <section class="policy-update" aria-labelledby="policy-update-title">
-    <h2 id="policy-update-title">What to know about Pacific Time</h2>
-    <p>Vancouver won't turn its clocks back on November 1. That means later winter sunrises and sunsets, and one hour ahead of Seattle.</p>
-  </section>
-
   <div class="controls-row">
     <div class="selector-row">
       <div class="selector">
@@ -1355,18 +1350,6 @@
     color: var(--text-primary);
     font-weight: 600;
   }
-
-  .policy-update {
-    margin-bottom: 16px;
-    padding: 18px 20px;
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    background: var(--card-bg);
-    font-size: 14px;
-    line-height: 1.65;
-  }
-
-  .policy-update h2 { font-size: 17px; margin: 0 0 8px; }
 
   /* ─── Controls row ───────────────────────────────────── */
 

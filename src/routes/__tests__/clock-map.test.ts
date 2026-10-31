@@ -17,16 +17,17 @@ afterEach(() => {
 });
 
 describe('Regional clock map', () => {
-  it('keeps a compact trigger above the footer instead of a map between the policy note and the controls', () => {
+  it('keeps a compact trigger above the footer instead of a map above the controls', () => {
     const { container } = render(Page);
-    const policy = container.querySelector('.policy-update')!;
     const clocks = container.querySelector('#regional-clocks')!;
     const controls = container.querySelector('.controls-row')!;
     const footer = container.querySelector('footer')!;
     const dialog = container.querySelector('#regional-clocks-dialog') as HTMLDialogElement;
     const trigger = clocks.querySelector('button')!;
     expect(container.querySelector('.eyebrow')).toBeNull();
-    expect(policy.nextElementSibling).toBe(controls);
+    expect(container.querySelector('.policy-update')).toBeNull();
+    expect(container.querySelector('header')?.nextElementSibling).toBe(controls);
+    expect(controls.compareDocumentPosition(clocks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(clocks.nextElementSibling).toBe(footer);
     expect(dialog.open).toBe(false);
     expect(dialog.style.display).toBe('none');
@@ -49,7 +50,6 @@ describe('Regional clock map', () => {
       const fill = shape.getAttribute('fill');
       expect(fill === 'currentColor' || fill === 'none').toBe(true);
     }
-    expect(policy.querySelectorAll('a')).toHaveLength(0);
     const notes = container.querySelector('footer .footer-credit')!;
     const mapLinks = [...notes.querySelectorAll('a[href="#regional-clocks"]')].map((link) => link.textContent);
     expect(mapLinks).toEqual(['before-and-after clock map', 'Seattle']);
