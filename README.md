@@ -73,13 +73,41 @@ npm run test:e2e     # end-to-end tests (Playwright)
 
 ## Deploy
 
-The app uses `@sveltejs/adapter-node`. It's deployed on Fly.io:
+The app uses `@sveltejs/adapter-node`.
+
+### Production
+
+`fly.toml` targets the production Fly app `vancouver-pdt` (bcdaylight.ca). Production stays manual:
 
 ```bash
 fly deploy
 ```
 
-The `fly.toml` is included in the repo. You'll need a Fly.io account and `flyctl` installed.
+You'll need a Fly.io account and `flyctl` installed. Do not use that command for staging.
+
+### Staging
+
+Staging is the Fly app `bcdaylight-staging` at <https://bc-daylight.staging.adamstuckert.com>. It stays behind GitHub sign-in for the `aldervale` account. The gate is [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) in the staging image, not SvelteKit middleware. That proxy's default `approval_prompt=force` is what currently sends every login through the GitHub consent screen.
+
+Push the `staging` branch to deploy. The [Deploy staging](.github/workflows/deploy-staging.yml) workflow builds this commit, overlays `/app/build` on the current staging image (the gateway and private files stay in place), and checks the public version endpoint. You can also run that workflow by hand and pass a git ref. It never deploys `vancouver-pdt`.
+
+The workflow reads the Actions secret `FLY_API_TOKEN_STAGING` (a Fly token that can update `bcdaylight-staging` only). If that secret is missing, the workflow stops with an error. Do not commit the token.
+
+Signed-in sessions last 8 hours, and GitHub is asked for `approval_prompt=auto` so a returning login does not force the consent screen. Who can sign in does not change. Those settings live in [`deploy/staging/oauth2-proxy.session.env`](deploy/staging/oauth2-proxy.session.env) and are applied to the staging machine on each deploy. No extra Fly secret is required for the session length. Existing OAuth client credentials on the Fly app stay where they are. If a deploy rolls back because the proxy command line still sends `approval_prompt=force`, that flag is set explicitly in the staging image and outranks the environment; remove it there (and any `--cookie-expire` shorter than `8h`).
+
+### Check what is deployed
+
+This does not require sign-in:
+
+```bash
+curl -s https://bc-daylight.staging.adamstuckert.com/version
+```
+
+```json
+{ "sha": "<full commit sha>", "builtAt": "<UTC build time>" }
+```
+
+The same path exists in the app generally. It returns those two fields and no page content. Full browser tests run against a local build; staging's GitHub gate stays closed, so the post-deploy Playwright check only calls `/version`, `/ping`, and the sign-in redirect.
 
 ---
 

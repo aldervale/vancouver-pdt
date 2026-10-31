@@ -1,3 +1,4 @@
+# Production Fly app (bcdaylight.ca). Do not point staging deploys at this file.
 app = "vancouver-pdt"
 primary_region = "yyz"
 

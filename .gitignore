@@ -4,3 +4,5 @@ build/
 .env
 .env.*
 !.env.example
+deploy/staging/.rollback.json
+deploy/staging/.overlay/
