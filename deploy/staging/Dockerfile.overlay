@@ -1,0 +1,7 @@
+# Overlay the SvelteKit server build onto the current bcdaylight-staging image.
+# Keeps the oauth2-proxy gateway, supervisor, and private files in the lower
+# layers. Do not build this with `fly deploy` or the repo fly.toml.
+# That file targets production app vancouver-pdt.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY app-build/ /app/build/

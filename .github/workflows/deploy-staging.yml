@@ -1,0 +1,100 @@
+name: Deploy staging
+
+# Deploys Fly app bcdaylight-staging only. Production (vancouver-pdt / bcdaylight.ca)
+# is not a target of this workflow and fly.toml is not used.
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy to bcdaylight-staging (branch, tag, or commit SHA)
+        required: true
+        default: staging
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-bcdaylight-staging
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Require staging Fly token
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail if FLY_API_TOKEN_STAGING is missing
+        env:
+          FLY_API_TOKEN_STAGING: ${{ secrets.FLY_API_TOKEN_STAGING }}
+        run: |
+          if [ -z "${FLY_API_TOKEN_STAGING}" ]; then
+            echo "::error::Missing GitHub Actions secret FLY_API_TOKEN_STAGING. Add a Fly API token scoped to the bcdaylight-staging app. This workflow does not deploy production (vancouver-pdt)."
+            exit 1
+          fi
+
+  test:
+    name: Unit and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --workers=2
+
+  deploy:
+    name: Deploy bcdaylight-staging
+    needs: [preflight, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - id: rev
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "built=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - name: Build
+        env:
+          COMMIT_SHA: ${{ steps.rev.outputs.sha }}
+          BUILD_TIME: ${{ steps.rev.outputs.built }}
+        run: npm run build
+      - name: Deploy staging image
+        id: deploy
+        env:
+          FLY_API_TOKEN_STAGING: ${{ secrets.FLY_API_TOKEN_STAGING }}
+          COMMIT_SHA: ${{ steps.rev.outputs.sha }}
+          BUILD_TIME: ${{ steps.rev.outputs.built }}
+        run: node scripts/deploy-staging.mjs
+      - name: Playwright checks against staging
+        env:
+          STAGING_BASE_URL: https://bc-daylight.staging.adamstuckert.com
+          EXPECTED_COMMIT_SHA: ${{ steps.rev.outputs.sha }}
+          EXPECTED_BUILD_TIME: ${{ steps.rev.outputs.built }}
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test --config=playwright.staging.config.ts
+      - name: Roll back staging if the post-deploy checks fail
+        if: failure() && steps.deploy.outcome == 'success'
+        env:
+          FLY_API_TOKEN_STAGING: ${{ secrets.FLY_API_TOKEN_STAGING }}
+        run: node scripts/deploy-staging.mjs --rollback
