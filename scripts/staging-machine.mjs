@@ -18,6 +18,12 @@ export const SESSION_ENV_KEYS = [
   'OAUTH2_PROXY_APPROVAL_PROMPT'
 ];
 
+const SESSION_ENV_VALUES = {
+  OAUTH2_PROXY_COOKIE_EXPIRE: '8h',
+  OAUTH2_PROXY_COOKIE_REFRESH: '0s',
+  OAUTH2_PROXY_APPROVAL_PROMPT: 'auto'
+};
+
 export const SKIP_AUTH_ENV = 'OAUTH2_PROXY_SKIP_AUTH_ROUTES';
 export const VERSION_SKIP_ROUTE = '^/version$';
 export const COMMIT_ENV = 'COMMIT_SHA';
@@ -189,6 +195,23 @@ function replaceAssigned(text, key, value) {
   return text.replace(re, `$1$2"${value}"`);
 }
 
+function hasAssignedKey(text, key) {
+  return new RegExp(`(^|\\n)[ \\t]*${key}[ \\t]*[:=]`).test(text);
+}
+
+function looksLikeProxyConfig(text) {
+  return /(?:^|\n)[ \t]*(provider|cookie_expire|cookie_secret|client_id|client_secret|upstreams|github_user|github_users|email_domains)[ \t]*[:=]/.test(
+    text
+  );
+}
+
+function insertMissingApprovalPrompt(text) {
+  if (hasAssignedKey(text, 'approval_prompt')) return text;
+  if (/^\s*\[program:/m.test(text)) return text;
+  if (!looksLikeProxyConfig(text)) return text;
+  return `${text.replace(/\s*$/, '')}\napproval_prompt = "auto"\n`;
+}
+
 function replaceFlag(text, flag, value) {
   return text
     .replace(new RegExp(`--${flag}=\\S+`, 'g'), `--${flag}=${value}`)
@@ -212,10 +235,22 @@ function insertVersionSkip(text) {
   return text;
 }
 
+function isOauth2ProxyInvocation(line) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';') || trimmed.startsWith('[')) return false;
+  const assignment = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+  let body = trimmed;
+  if (assignment) {
+    if (!/^(command|cmd)$/i.test(assignment[1])) return false;
+    body = assignment[2].trim();
+  }
+  if (!body) return false;
+  const token = body.split(/\s+/)[0].replace(/^['"]|['"]$/g, '');
+  return /(?:^|\/)oauth2-proxy$/.test(token);
+}
+
 function ensureCommandFlags(line) {
-  if (!line.includes('oauth2-proxy')) return line;
-  const trimmed = line.trimStart();
-  if (trimmed.startsWith('#') || trimmed.startsWith(';')) return line;
+  if (!isOauth2ProxyInvocation(line)) return line;
   let next = line;
   next = replaceFlag(next, 'approval-prompt', 'auto');
   next = replaceFlag(next, 'cookie-expire', '8h');
@@ -229,6 +264,94 @@ function ensureCommandFlags(line) {
   return next;
 }
 
+function splitEnvList(value) {
+  const parts = [];
+  let current = '';
+  let quote = '';
+  for (const ch of value) {
+    if (quote) {
+      current += ch;
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === ',') {
+      if (current.trim()) parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+function upsertEnvAssignments(listText) {
+  const sessionKeys = new Set(SESSION_ENV_KEYS);
+  const kept = [];
+  for (const part of splitEnvList(listText)) {
+    const match = part.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if (match && sessionKeys.has(match[1])) continue;
+    kept.push(part);
+  }
+  for (const key of SESSION_ENV_KEYS) {
+    kept.push(`${key}="${SESSION_ENV_VALUES[key]}"`);
+  }
+  return kept.join(',');
+}
+
+function patchEnvironmentLine(line) {
+  const match = line.match(/^(\s*environment\s*=\s*)(.*)$/i);
+  if (!match) return line;
+  return `${match[1]}${upsertEnvAssignments(match[2].trim())}`;
+}
+
+function patchSupervisorProgram(text) {
+  if (!/^\s*\[program:oauth2-proxy\]\s*$/im.test(text)) return text;
+  const lines = text.split('\n');
+  const out = [];
+  let section = null;
+
+  const flush = () => {
+    if (!section) return;
+    const hasEnv = section.some((line) => /^\s*environment\s*=/i.test(line) && !/^\s*[#;]/.test(line));
+    if (!hasEnv) {
+      let insertAt = 1;
+      for (let index = 0; index < section.length; index += 1) {
+        const trimmed = section[index].trimStart();
+        if (trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
+        if (/^command\s*=/i.test(trimmed)) insertAt = index + 1;
+      }
+      section.splice(insertAt, 0, `environment=${upsertEnvAssignments('')}`);
+    }
+    out.push(...section);
+    section = null;
+  };
+
+  for (const line of lines) {
+    if (/^\s*\[/.test(line)) {
+      flush();
+      if (/^\s*\[program:oauth2-proxy\]\s*$/i.test(line)) {
+        section = [line];
+        continue;
+      }
+    }
+    if (section) {
+      const trimmed = line.trimStart();
+      const commented = trimmed.startsWith('#') || trimmed.startsWith(';');
+      section.push(!commented && /^\s*environment\s*=/i.test(line) ? patchEnvironmentLine(line) : line);
+      continue;
+    }
+    out.push(line);
+  }
+  flush();
+  return out.join('\n');
+}
+
 export function assertPatchPreservesGatewayPolicy(before, after) {
   for (const marker of GATEWAY_POLICY_MARKERS) {
     if (before.includes(marker) && !after.includes(marker)) {
@@ -238,7 +361,8 @@ export function assertPatchPreservesGatewayPolicy(before, after) {
 }
 
 /**
- * Update oauth2-proxy session settings in a config file or command line.
+ * Update oauth2-proxy session settings in a config file, a command line,
+ * or the supervisord program that runs the proxy.
  * Other lines, including secrets, headers, host rules, and the GitHub user
  * allow-list, stay as they are.
  */
@@ -248,10 +372,12 @@ export function patchProxyText(text) {
   next = replaceAssigned(next, 'cookie_expire', '8h');
   next = replaceAssigned(next, 'cookie_refresh', '0s');
   next = replaceAssigned(next, 'approval_prompt', 'auto');
+  next = insertMissingApprovalPrompt(next);
   next = next
     .split('\n')
     .map((line) => ensureCommandFlags(line))
     .join('\n');
+  next = patchSupervisorProgram(next);
   next = insertVersionSkip(next);
   assertPatchPreservesGatewayPolicy(normalized, next);
   return { text: next, changed: next !== normalized };

@@ -237,7 +237,107 @@ describe('oauth2-proxy config patch', () => {
     expect(patched.text).toContain('--cookie-expire=8h');
     expect(patched.text).toContain('--approval-prompt=auto');
   });
+
+  it('adds approval_prompt when the config has no such key', () => {
+    const config = `provider = "github"
+client_secret = "super-secret-value"
+cookie_secret = "cookie-secret-value"
+cookie_name = "bcdaylight_staging"
+cookie_expire = "168h"
+cookie_refresh = "1h"
+github_users = ["aldervale"]
+email_domains = ["*"]
+skip_auth_routes = [
+  "^/robots\\.txt$",
+  "^/ping$"
+]
+`;
+    expect(config).not.toContain('approval_prompt');
+    const patched = patchProxyText(config);
+    expect(patched.text.match(/(^|\n)[ \t]*approval_prompt[ \t]*[:=]/g)).toHaveLength(1);
+    expect(patched.text).toContain('approval_prompt = "auto"');
+    expect(patched.text).toContain('cookie_expire = "8h"');
+    expect(patched.text).toContain('cookie_refresh = "0s"');
+    expect(patched.text).not.toContain('168h');
+    expect(patched.text).not.toContain('cookie_refresh = "1h"');
+    expect(patched.text).toContain('github_users = ["aldervale"]');
+    expect(patched.text).toContain('client_secret = "super-secret-value"');
+    expect(patched.text).toContain('cookie_secret = "cookie-secret-value"');
+    expect(collectSkipRoutes(patched.text)).toEqual(
+      expect.arrayContaining(['^/robots\\.txt$', '^/ping$', '^/version$'])
+    );
+    expect(patchProxyText(patched.text).text).toBe(patched.text);
+  });
+
+  it('delivers session settings to the supervisord oauth2-proxy program', () => {
+    const supervisor = `[supervisord]
+nodaemon=true
+
+[program:oauth2-proxy]
+command=/entrypoint.sh
+environment=OAUTH2_PROXY_CLIENT_ID="Ov23liBwlGSka4oQIqj0",OAUTH2_PROXY_CLIENT_SECRET="super-secret-value",OAUTH2_PROXY_COOKIE_SECRET="cookie-secret-value",OAUTH2_PROXY_COOKIE_EXPIRE="168h",OAUTH2_PROXY_SCOPE="user:email,read:org",OAUTH2_PROXY_GITHUB_USER="aldervale"
+directory=/etc/oauth2-proxy
+stdout_logfile=/var/log/oauth2-proxy.log
+stdout_logfile_maxbytes=0
+
+[program:web]
+command=/app/server
+environment=PORT="3000"
+`;
+    const patched = patchProxyText(supervisor);
+    const section = programSection(patched.text, 'oauth2-proxy');
+    const environment = section.match(/^\s*environment\s*=(.*)$/m)?.[1] ?? '';
+
+    expect(section.split('\n')[0]).toBe('[program:oauth2-proxy]');
+    expect(section.split('\n')[0]).not.toContain('--');
+    expect(patched.text).toContain('command=/entrypoint.sh\n');
+    expect(patched.text).toContain('directory=/etc/oauth2-proxy\n');
+    expect(patched.text).toContain('stdout_logfile=/var/log/oauth2-proxy.log\n');
+    expect(environment).toContain('OAUTH2_PROXY_COOKIE_EXPIRE="8h"');
+    expect(environment).toContain('OAUTH2_PROXY_COOKIE_REFRESH="0s"');
+    expect(environment).toContain('OAUTH2_PROXY_APPROVAL_PROMPT="auto"');
+    expect(environment.match(/OAUTH2_PROXY_COOKIE_EXPIRE=/g)).toHaveLength(1);
+    expect(environment).not.toContain('168h');
+    expect(environment).toContain('OAUTH2_PROXY_CLIENT_SECRET="super-secret-value"');
+    expect(environment).toContain('OAUTH2_PROXY_COOKIE_SECRET="cookie-secret-value"');
+    expect(environment).toContain('OAUTH2_PROXY_SCOPE="user:email,read:org"');
+    expect(environment).toContain('OAUTH2_PROXY_GITHUB_USER="aldervale"');
+    expect(patched.text).not.toMatch(/(^|\n)\s*approval_prompt\s*[:=]/);
+    expect(programSection(patched.text, 'web')).toBe(programSection(supervisor, 'web'));
+    expect(patchProxyText(patched.text).text).toBe(patched.text);
+
+    const direct = patchProxyText(`[program:oauth2-proxy]
+command=/usr/local/bin/oauth2-proxy --config=/etc/oauth2-proxy.cfg --github-user=aldervale
+environment=OAUTH2_PROXY_CLIENT_SECRET="super-secret-value"
+`);
+    expect(direct.text.split('\n')[0]).toBe('[program:oauth2-proxy]');
+    const command = direct.text.match(/^command=(.*)$/m)?.[1] ?? '';
+    expect(command.startsWith('/usr/local/bin/oauth2-proxy ')).toBe(true);
+    expect(command).toContain('--cookie-expire=8h');
+    expect(command).toContain('--cookie-refresh=0s');
+    expect(command).toContain('--approval-prompt=auto');
+    expect(command).toContain('--github-user=aldervale');
+    expect(direct.text).toContain('OAUTH2_PROXY_COOKIE_EXPIRE="8h"');
+    expect(direct.text).toContain('OAUTH2_PROXY_COOKIE_REFRESH="0s"');
+    expect(direct.text).toContain('OAUTH2_PROXY_APPROVAL_PROMPT="auto"');
+    expect(direct.text).toContain('OAUTH2_PROXY_CLIENT_SECRET="super-secret-value"');
+    expect(patchProxyText(direct.text).text).toBe(direct.text);
+  });
 });
+
+function programSection(text, name) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => line.trim() === `[program:${name}]`);
+  if (start < 0) throw new Error(`missing [program:${name}]`);
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (lines[index].trim().startsWith('[')) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n');
+}
 
 describe('machine update plan', () => {
   it('replaces only the staging image and preserves headers, hosts, and other env', () => {
