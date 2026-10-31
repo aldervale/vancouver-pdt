@@ -222,7 +222,7 @@ describe('Accessible controls and disclosure panels', () => {
     await fireEvent.click(toggle);
     const panel = container.querySelector(`[id="${toggle.getAttribute('aria-controls')}"]`)!;
     const cards = Array.from(panel.querySelectorAll('.mode-switchable'));
-    const names = ['Pacific Time (PCT) (UTC−7)', 'Old system (UTC−8 winter)', 'Permanent PST (UTC−8)'];
+    const names = ['Pacific Time (UTC−7)', 'Old system (UTC−8 winter)', 'Permanent PST (UTC−8)'];
     expect(cards).toHaveLength(3);
     for (const [index, card] of cards.entries()) {
       expect(card).toHaveAccessibleName(names[index]);
@@ -296,7 +296,30 @@ describe('Honest comparison labels', () => {
     const pills = container.querySelectorAll('.mode-pill.pdt-pill');
     expect(pills.length).toBeGreaterThan(0);
     for (const pill of pills) expect(pill).toHaveTextContent(/^PCT$/);
-    expect(container.querySelector('.chart-subtitle')).toHaveTextContent('UTC−7');
+    expect(container.querySelector('.chart-subtitle')).toHaveTextContent('Pacific Time (UTC−7) — your 7 AM–11 PM window');
+    expect(container.querySelector('.chart-subtitle')).not.toHaveTextContent('(PCT)');
+  });
+
+  it('uses one pair of brackets on every chart subtitle and matching scenario label', async () => {
+    const { container } = render(Page);
+    const doubled = /\)\s*\(/;
+    const subtitles = [
+      ['Pacific Time (PCT)', 'Pacific Time (UTC−7) — your 7 AM–11 PM window'],
+      ['Old system (clock changes)', 'Old system (UTC−8 winter / UTC−7 summer) — your 7 AM–11 PM window'],
+      ['Permanent PST', 'Permanent PST (UTC−8) — your 7 AM–11 PM window'],
+    ] as const;
+    for (const [name, subtitle] of subtitles) {
+      await fireEvent.click(screen.getByRole('button', { name }));
+      const chartSubtitle = container.querySelector('.chart-subtitle')!;
+      expect(chartSubtitle).toHaveTextContent(subtitle);
+      expect(chartSubtitle.textContent).not.toMatch(doubled);
+    }
+    for (const persona of ['I have a kid', 'I work a 9-to-5']) {
+      await fireEvent.click(screen.getByRole('button', { name: new RegExp(persona) }));
+    }
+    for (const label of container.querySelectorAll('.context-mode-label, .sports-subtitle strong')) {
+      expect(label.textContent).not.toMatch(doubled);
+    }
   });
 
   it('uses Old system consistently outside the descriptive main toggle', async () => {
@@ -586,6 +609,30 @@ describe('Evidence and chart readability', () => {
     }
     expect(school.querySelectorAll('a[href^="#ref-school-"]')).toHaveLength(2);
     expect(school).not.toHaveTextContent('elementary schools start at 8:45 AM');
+  });
+
+  it('labels 4 AM only when the sunrise curve passes 5 AM', async () => {
+    render(Page);
+    await act();
+    const labelsFor = async (name: string) => {
+      drawnText.length = 0;
+      await fireEvent.click(screen.getByRole('button', { name }));
+      await fireEvent(window, new Event('resize'));
+      return drawnText.map(label => label.text);
+    };
+
+    for (const name of ['Pacific Time (PCT)', 'Old system (clock changes)']) {
+      const labels = await labelsFor(name);
+      expect(labels, name).toContain('5 AM');
+      expect(labels, name).not.toContain('4 AM');
+      expect(labels, name).not.toContain('3 AM');
+    }
+
+    const pst = await labelsFor('Permanent PST');
+    expect(pst).toContain('4 AM');
+    expect(pst).toContain('5 AM');
+    expect(pst).toContain('2 AM');
+    expect(pst).not.toContain('3 AM');
   });
 
   it.each(['Pacific Time (PCT)', 'Old system (clock changes)', 'Permanent PST'])(

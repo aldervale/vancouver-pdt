@@ -59,8 +59,16 @@ test.describe('Vancouver Pacific Time App', () => {
     await expect(page.locator('h1')).toContainText('No More Clock Changes');
   });
 
-  test('subtitle shows Pacific Time (PCT) by default', async ({ page }) => {
-    await expect(page.locator('.chart-subtitle')).toContainText('Pacific Time (PCT)');
+  test('chart subtitles use a single offset in every comparison', async ({ page }) => {
+    const subtitles = [
+      ['Pacific Time (PCT)', 'Pacific Time (UTC−7) — your 7 AM–11 PM window'],
+      ['Old system (clock changes)', 'Old system (UTC−8 winter / UTC−7 summer) — your 7 AM–11 PM window'],
+      ['Permanent PST', 'Permanent PST (UTC−8) — your 7 AM–11 PM window'],
+    ] as const;
+    for (const [name, subtitle] of subtitles) {
+      await page.locator('.mode-toggle').getByRole('button', { name, exact: true }).click();
+      await expect(page.locator('.chart-subtitle')).toHaveText(subtitle);
+    }
   });
 
   test('the Pacific Time card is gone and the supporting notes stay in the footer', async ({ page }) => {
@@ -302,7 +310,7 @@ test.describe('Vancouver Pacific Time App', () => {
       const toggle = page.getByRole('button', { name: new RegExp(persona) });
       await toggle.click();
       const panel = await controlledPanel(page, toggle);
-      for (const name of ['Pacific Time (PCT) (UTC−7)', 'Old system (UTC−8 winter)', 'Permanent PST (UTC−8)']) {
+      for (const name of ['Pacific Time (UTC−7)', 'Old system (UTC−8 winter)', 'Permanent PST (UTC−8)']) {
         const card = panel.getByRole('button', { name, exact: true });
         await expect(card).toHaveAccessibleName(name);
         await expect(card).toHaveAccessibleDescription(new RegExp(`^\\d+ ${metric.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));

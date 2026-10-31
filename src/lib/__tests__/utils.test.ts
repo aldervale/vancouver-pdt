@@ -8,6 +8,7 @@ import {
   fmtTime,
   fmtDayLength,
   generateDailyData,
+  daylightChartAxis,
   sportsData,
   SPRING_FORWARD,
   FALL_BACK,
@@ -245,6 +246,38 @@ describe('generateDailyData', () => {
     const pdtLight = pdtData.filter(d => d.sunset > 17.0).length;
     const pstLight = pstData.filter(d => d.sunset > 17.0).length;
     expect(pdtLight).toBeGreaterThan(pstLight);
+  });
+
+  it('keeps every sunrise and sunset inside the labelled axis', () => {
+    for (const data of [pdtData, dstData, pstData]) {
+      const axis = daylightChartAxis(data);
+      const earliest = Math.min(...data.map(day => day.sunrise));
+      const latest = Math.max(...data.map(day => day.sunset));
+      expect(axis.yMin).toBeLessThanOrEqual(axis.labelMin);
+      expect(axis.yMax).toBeGreaterThanOrEqual(axis.labelMax);
+      expect(earliest).toBeGreaterThanOrEqual(axis.labelMin);
+      expect(latest).toBeLessThanOrEqual(axis.labelMax);
+    }
+  });
+
+  it('gives permanent PST a 4 AM tick without shifting the other views', () => {
+    const pstEarliest = Math.min(...pstData.map(day => day.sunrise));
+    expect(pstEarliest).toBeGreaterThan(4);
+    expect(pstEarliest).toBeLessThan(5);
+    expect(daylightChartAxis(pstData)).toEqual({ yMin: 3, yMax: 26, labelMin: 4, labelMax: 26 });
+
+    for (const data of [pdtData, dstData]) {
+      const earliest = Math.min(...data.map(day => day.sunrise));
+      expect(earliest).toBeGreaterThan(5);
+      expect(daylightChartAxis(data)).toEqual({ yMin: 4, yMax: 26, labelMin: 5, labelMax: 26 });
+    }
+  });
+
+  it('extends either end when a curve passes the default ticks and does not shrink the scale', () => {
+    expect(daylightChartAxis([{ sunrise: 3.2, sunset: 21 }])).toEqual({ yMin: 2, yMax: 26, labelMin: 3, labelMax: 26 });
+    expect(daylightChartAxis([{ sunrise: 6.4, sunset: 26.2 }])).toEqual({ yMin: 4, yMax: 27, labelMin: 5, labelMax: 27 });
+    expect(daylightChartAxis([{ sunrise: 6.4, sunset: 20 }])).toEqual({ yMin: 4, yMax: 26, labelMin: 5, labelMax: 26 });
+    expect(daylightChartAxis([])).toEqual({ yMin: 4, yMax: 26, labelMin: 5, labelMax: 26 });
   });
 
   it('DST school dark days is between PST and PDT', () => {

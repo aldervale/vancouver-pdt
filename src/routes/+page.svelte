@@ -4,6 +4,7 @@
   import { driver } from 'driver.js';
   import { trapTourFocus } from '$lib/tour-focus';
   import RegionalClocks from '$lib/RegionalClocks.svelte';
+  import { daylightChartAxis } from '$lib/utils';
   import 'driver.js/dist/driver.css';
 
   let canvas: HTMLCanvasElement;
@@ -318,8 +319,7 @@
     const chartW = W - padLeft - padRight;
     const chartH = H - padTop - padBottom;
 
-    const yMin = 4;
-    const yMax = 26;
+    const { yMin, yMax, labelMin, labelMax } = daylightChartAxis(data);
 
     function yPos(hour: number) {
       return padTop + (hour - yMin) / (yMax - yMin) * chartH;
@@ -507,14 +507,9 @@
     // Y-axis labels. Wake and sleep are already placed, so nearby hours drop out
     // when a short chart would otherwise stack 12px text on top of itself.
     const yLabels = [];
-    for (let h = 5; h <= 26; h++) {
+    for (let h = labelMin; h <= labelMax; h++) {
       if (h === WAKE || h === SLEEP) continue;
-      const text = h === 12 ? 'NOON'
-        : h === 24 ? '12 AM'
-        : h === 25 ? '1 AM'
-        : h === 26 ? '2 AM'
-        : h < 12 ? `${h} AM`
-        : `${h - 12} PM`;
+      const text = h === 12 ? 'NOON' : formatHour(h);
       yLabels.push({ h, text });
     }
     yLabels.sort((a, b) => Number(b.h === 12 || b.h === 24) - Number(a.h === 12 || a.h === 24));
@@ -779,7 +774,7 @@
       <div class="chart-title">Daylight vs. Waking Hours</div>
       <div class="chart-subtitle">
         {#if mode === 'pdt'}
-          Pacific Time (PCT) (UTC−7) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
+          Pacific Time (UTC−7) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
         {:else if mode === 'dst'}
           Old system (UTC−8 winter / UTC−7 summer) — your {formatHour(wakeHour)}–{formatHour(sleepHour)} window
         {:else}
@@ -995,7 +990,7 @@
           An illustrative 8:30 AM reference time, not a universal school start or departure time.
           School schedules and travel times vary. This counts calendar days when the sun has not yet risen.
           Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Pacific Time (PCT) (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
+            {mode === 'pdt' ? 'Pacific Time (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
           </strong>
         </div>
       </div>
@@ -1004,7 +999,7 @@
         <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" aria-labelledby="school-pdt-label" aria-describedby="school-pdt-count school-pdt-metric" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PCT</span>
-            <span id="school-pdt-label" class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
+            <span id="school-pdt-label" class="context-mode-label">Pacific Time (UTC−7)</span>
           </div>
           <div id="school-pdt-count" class="context-big-number orange">{schoolDarkDays.pdt}</div>
           <div id="school-pdt-metric" class="context-big-label">calendar days with sunrise after 8:30 AM</div>
@@ -1058,7 +1053,7 @@
         <div class="sports-subtitle">
           Calendar days when sunset is after 5:00 PM, a reference time for the end of a typical workday.
           Currently showing: <strong class:pdt-accent={mode === 'pdt'} class:dst-accent={mode === 'dst'} class:pst-accent={mode === 'pst'}>
-            {mode === 'pdt' ? 'Pacific Time (PCT) (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
+            {mode === 'pdt' ? 'Pacific Time (UTC−7)' : mode === 'dst' ? 'Old system' : 'Permanent PST (UTC−8)'}
           </strong>
         </div>
       </div>
@@ -1067,7 +1062,7 @@
         <div class="context-card mode-switchable" class:context-card-active={mode === 'pdt'} role="button" aria-labelledby="work-pdt-label" aria-describedby="work-pdt-count work-pdt-metric" tabindex="0" aria-pressed={mode === 'pdt'} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mode = 'pdt'; } }} onclick={() => mode = 'pdt'} title="Switch to Pacific Time (PCT)">
           <div class="context-card-header">
             <span class="mode-pill pdt-pill">PCT</span>
-            <span id="work-pdt-label" class="context-mode-label">Pacific Time (PCT) (UTC−7)</span>
+            <span id="work-pdt-label" class="context-mode-label">Pacific Time (UTC−7)</span>
           </div>
           <div id="work-pdt-count" class="context-big-number gold">{workDaylightDays.pdt}</div>
           <div id="work-pdt-metric" class="context-big-label">calendar days with sunset after 5 PM</div>
