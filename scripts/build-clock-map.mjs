@@ -11,6 +11,9 @@
  *
  * Regeneration needs `polygon-clipping` installed locally.
  * The app does not depend on them at runtime.
+ *
+ * The main map is a cropped Albers view of B.C. and its neighbours.
+ * Most of Alaska is a separate inset; the panhandle stays beside northern B.C.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import polygonClipping from 'polygon-clipping';
@@ -19,21 +22,26 @@ const ne = JSON.parse(readFileSync('/tmp/geo/ne_50m_admin_1.geojson', 'utf8'));
 const timeZones = JSON.parse(readFileSync('/tmp/geo/ntad-time-zones.geojson', 'utf8'));
 
 const DEG = Math.PI / 180;
-const PHI1 = 40 * DEG;
-const PHI2 = 64 * DEG;
-const PHI0 = 48 * DEG;
-const LAMBDA0 = -126 * DEG;
-const N = (Math.sin(PHI1) + Math.sin(PHI2)) / 2;
-const C = Math.cos(PHI1) ** 2 + 2 * N * Math.sin(PHI1);
-const RHO0 = Math.sqrt(C - 2 * N * Math.sin(PHI0)) / N;
 
-function project(lon, lat) {
-  const phi = lat * DEG;
-  const lambda = lon * DEG;
-  const rho = Math.sqrt(C - 2 * N * Math.sin(phi)) / N;
-  const theta = N * (lambda - LAMBDA0);
-  return [rho * Math.sin(theta), RHO0 - rho * Math.cos(theta)];
+function makeProjector(phi1Deg, phi2Deg, phi0Deg, lambda0Deg) {
+  const phi1 = phi1Deg * DEG;
+  const phi2 = phi2Deg * DEG;
+  const phi0 = phi0Deg * DEG;
+  const lambda0 = lambda0Deg * DEG;
+  const n = (Math.sin(phi1) + Math.sin(phi2)) / 2;
+  const c = Math.cos(phi1) ** 2 + 2 * n * Math.sin(phi1);
+  const rho0 = Math.sqrt(c - 2 * n * Math.sin(phi0)) / n;
+  return (lon, lat) => {
+    const phi = lat * DEG;
+    const lambda = lon * DEG;
+    const rho = Math.sqrt(c - 2 * n * Math.sin(phi)) / n;
+    const theta = n * (lambda - lambda0);
+    return [rho * Math.sin(theta), rho0 - rho * Math.cos(theta)];
+  };
 }
+
+const projectMain = makeProjector(42, 61, 51, -120);
+const projectAlaska = makeProjector(55, 70, 63, -153);
 
 function toMulti(geometry) {
   if (!geometry) return [];
@@ -90,16 +98,26 @@ function union(parts) {
 const bc = findAdmin('British Columbia', 'Canada');
 const alberta = findAdmin('Alberta', 'Canada');
 const yukon = findAdmin('Yukon', 'Canada');
-const nwt = intersection(findAdmin('Northwest Territories', 'Canada'), box(-141, 59.8, -101, 71));
 const saskatchewan = findAdmin('Saskatchewan', 'Canada');
 const washington = findAdmin('Washington', 'United States of America');
 const oregon = findAdmin('Oregon', 'United States of America');
 const idaho = findAdmin('Idaho', 'United States of America');
 const montana = findAdmin('Montana', 'United States of America');
 const california = findAdmin('California', 'United States of America');
-// Western Aleutians (including Hawaii-Aleutian time, west of 169.5°W) are cropped.
+
+// Populated south only. High Arctic islands and the empty northern taper are cropped.
+const nwt = intersection(findAdmin('Northwest Territories', 'Canada'), box(-136.5, 59.8, -102, 64.05));
+const yukonSouth = intersection(yukon, box(-141.5, 59.7, -123.5, 64.05));
+
+// Western Aleutians (Hawaii-Aleutian time, west of 169.5°W) stay cropped.
 // The cut is farther east than that line so the Alaska Peninsula stays readable.
-const alaska = intersection(findAdmin('Alaska', 'United States of America'), box(-163, 51, -129, 71.5));
+const alaskaAll = intersection(findAdmin('Alaska', 'United States of America'), box(-163, 51, -129.5, 71.5));
+const alaskaPanhandle = intersection(alaskaAll, box(-141.15, 54.45, -129.4, 60.6));
+const alaskaMainland = difference(alaskaAll, alaskaPanhandle);
+
+// Story crop: northern California through the southern Yukon, coast through Saskatchewan.
+// Keeps the San Francisco Bay shape and cuts the map before Los Angeles.
+const frame = box(-141.3, 37.55, -101.05, 64.08);
 
 // Peace River and Northern Rockies communities named by the province.
 // Fort Ware sits near the western edge and is called out separately as PCT.
@@ -142,21 +160,22 @@ const malheurMountain = intersection(oregon, mountainZone);
 const oregonPacific = difference(oregon, malheurMountain);
 
 const regions = {
-  bc: mainBc,
-  neBc,
-  seBc,
-  alberta,
-  yukon,
+  bc: intersection(mainBc, frame),
+  neBc: intersection(neBc, frame),
+  seBc: intersection(seBc, frame),
+  alberta: intersection(alberta, frame),
+  yukon: intersection(yukonSouth, frame),
   nwt,
-  saskatchewan,
-  washington,
-  oregon: oregonPacific,
-  malheur: malheurMountain,
-  northIdaho,
-  southIdaho,
-  montana,
-  california,
-  alaska,
+  saskatchewan: intersection(saskatchewan, frame),
+  washington: intersection(washington, frame),
+  oregon: intersection(oregonPacific, frame),
+  malheur: intersection(malheurMountain, frame),
+  northIdaho: intersection(northIdaho, frame),
+  southIdaho: intersection(southIdaho, frame),
+  montana: intersection(montana, frame),
+  california: intersection(california, frame),
+  alaskaPanhandle: intersection(alaskaPanhandle, frame),
+  alaska: alaskaMainland,
 };
 
 function pointInRing(point, ring) {
@@ -215,9 +234,9 @@ const checks = [
   ['Malheur north of township boundary', -117.45, 42.50, 'malheur'],
   ['Missoula', -113.99, 46.87, 'montana'],
   ['Anchorage', -149.90, 61.22, 'alaska'],
-  ['Juneau panhandle', -134.52, 58.30, 'alaska'],
+  ['Juneau panhandle', -134.52, 58.30, 'alaskaPanhandle'],
   ['Fairbanks', -147.72, 64.84, 'alaska'],
-  ['Los Angeles', -118.24, 34.05, 'california'],
+  ['Redding', -122.39, 40.59, 'california'],
   ['San Francisco', -122.42, 37.77, 'california'],
   ['Fort Ware', -125.63, 57.42, 'bc'],
 ];
@@ -230,36 +249,74 @@ for (const [name, lon, lat, expected] of checks) {
   console.log(`${ok ? 'ok' : 'FAIL'} ${name}: ${hits.join(',') || 'none'} (expected ${expected})`);
 }
 
-const projected = {};
-let minX = Infinity;
-let minY = Infinity;
-let maxX = -Infinity;
-let maxY = -Infinity;
-for (const [id, multi] of Object.entries(regions)) {
-  projected[id] = multi.map((poly) => poly.map((ring) => ring.map(([lon, lat]) => {
-    const point = project(lon, lat);
-    minX = Math.min(minX, point[0]);
-    minY = Math.min(minY, point[1]);
-    maxX = Math.max(maxX, point[0]);
-    maxY = Math.max(maxY, point[1]);
-    return point;
-  })));
+function densifyRing(ring, step = 0.4) {
+  const out = [];
+  for (let i = 0; i < ring.length - 1; i++) {
+    const a = ring[i];
+    const b = ring[i + 1];
+    out.push(a);
+    const pieces = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step);
+    for (let k = 1; k < pieces; k++) {
+      const t = k / pieces;
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+  }
+  return out;
 }
 
-const PAD = 0.012;
-const width = maxX - minX;
-const height = maxY - minY;
-minX -= width * PAD;
-maxX += width * PAD;
-minY -= height * PAD;
-maxY += height * PAD;
-const targetWidth = 1000;
-const scale = targetWidth / (maxX - minX);
-const targetHeight = Math.round((maxY - minY) * scale);
-console.log('viewBox', `0 0 ${targetWidth} ${targetHeight}`, 'scale', scale.toFixed(1));
+function prepare(regionMap, project, epsilon, minArea, width) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const projected = {};
+  for (const [id, multi] of Object.entries(regionMap)) {
+    projected[id] = multi.map((poly) => poly.map((ring) => densifyRing(ring).map(([lon, lat]) => {
+      const point = project(lon, lat);
+      minX = Math.min(minX, point[0]);
+      minY = Math.min(minY, point[1]);
+      maxX = Math.max(maxX, point[0]);
+      maxY = Math.max(maxY, point[1]);
+      return point;
+    })));
+  }
+  const padX = (maxX - minX) * 0.02;
+  const padY = (maxY - minY) * 0.02;
+  minX -= padX;
+  maxX += padX;
+  minY -= padY;
+  maxY += padY;
+  const scale = width / (maxX - minX);
+  const height = Math.round((maxY - minY) * scale);
+  const scalePoint = ([x, y]) => [(x - minX) * scale, (maxY - y) * scale];
 
-function scalePoint([x, y]) {
-  return [(x - minX) * scale, (maxY - y) * scale];
+  const paths = {};
+  const anchors = {};
+  for (const [id, polys] of Object.entries(projected)) {
+    const kept = [];
+    let largest = null;
+    let largestArea = 0;
+    for (const poly of polys) {
+      const localEpsilon = id === 'alaskaPanhandle' ? 6.5 : epsilon;
+      const localMinArea = id === 'alaskaPanhandle' ? 900 : minArea;
+      const rings = poly
+        .map((ring) => simplify(ring.map(scalePoint), localEpsilon))
+        .map(closeRing)
+        .filter((ring) => ring.length >= 4);
+      if (!rings.length || ringArea(rings[0]) < localMinArea) continue;
+      kept.push(rings);
+      const area = ringArea(rings[0]);
+      if (area > largestArea) {
+        largestArea = area;
+        largest = rings[0];
+      }
+    }
+    paths[id] = kept;
+    const anchor = largest ? labelPoint(largest) : [0, 0];
+    anchors[id] = [Number(anchor[0].toFixed(1)), Number(anchor[1].toFixed(1))];
+    console.log(id, 'polys', kept.length, 'anchor', anchors[id].join(','), 'area', Math.round(largestArea));
+  }
+  return { paths, anchors, width, height, scalePoint };
 }
 
 function ringArea(ring) {
@@ -299,83 +356,108 @@ function simplify(points, epsilon) {
   return [points[0], points[last]];
 }
 
-const MIN_AREA = 18;
-const paths = {};
-const anchors = {};
-for (const [id, multi] of Object.entries(projected)) {
-  const kept = [];
-  let largest = null;
-  let largestArea = 0;
-  for (const poly of multi) {
-    const rings = poly.map((ring) => simplify(ring.map(scalePoint), 1.05)).map(closeRing).filter((ring) => ring.length >= 4);
-    const minArea = id === 'nwt' ? 4000 : id === 'alaska' ? 8 : MIN_AREA;
-    if (!rings.length || ringArea(rings[0]) < minArea) continue;
-    kept.push(rings);
-    const area = ringArea(rings[0]);
-    if (area > largestArea) {
-      largestArea = area;
-      largest = rings[0];
+function labelPoint(ring) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of ring) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  const cols = 36;
+  const rows = 36;
+  let best = [(minX + maxX) / 2, (minY + maxY) / 2];
+  let bestD = -1;
+  for (let i = 0; i <= cols; i++) {
+    for (let j = 0; j <= rows; j++) {
+      const x = minX + ((maxX - minX) * i) / cols;
+      const y = minY + ((maxY - minY) * j) / rows;
+      if (!pointInRing([x, y], ring)) continue;
+      let d = Infinity;
+      for (let k = 0; k < ring.length - 1; k++) {
+        const dist = distToSeg([x, y], ring[k], ring[k + 1]);
+        if (dist < d) d = dist;
+        if (d <= bestD) break;
+      }
+      if (d > bestD) {
+        bestD = d;
+        best = [x, y];
+      }
     }
   }
-  paths[id] = kept;
-  let sx = 0;
-  let sy = 0;
-  let n = 0;
-  for (const [x, y] of largest ?? []) {
-    sx += x;
-    sy += y;
-    n++;
-  }
-  anchors[id] = n ? [Number((sx / n).toFixed(1)), Number((sy / n).toFixed(1))] : [0, 0];
-  console.log(id, 'polys', kept.length, 'anchor', anchors[id].join(','), 'area', Math.round(largestArea));
+  return best;
 }
+
+const mainRegions = Object.fromEntries(Object.entries(regions).filter(([id]) => id !== 'alaska'));
+const main = prepare(mainRegions, projectMain, 0.65, 70, 1000);
+const alaska = prepare({ alaska: regions.alaska }, projectAlaska, 3.4, 40, 640);
 
 function pathFor(multi) {
   return multi.map((rings) => rings.map((ring) => ring.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join('') + 'Z').join('')).join('');
 }
 
-const cityDots = checks.map(([name, lon, lat]) => {
-  const [x, y] = scalePoint(project(lon, lat));
-  return { name, x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) };
-});
+const markerIds = ['Vancouver', 'Creston', 'Seattle', 'Whitehorse', 'Yellowknife'];
+const markers = {};
+for (const [name, lon, lat] of checks) {
+  if (!markerIds.includes(name)) continue;
+  const [x, y] = main.scalePoint(projectMain(lon, lat));
+  markers[name] = [Number(x.toFixed(1)), Number(y.toFixed(1))];
+}
+const [ax, ay] = alaska.scalePoint(projectAlaska(-149.9, 61.22));
+const anchorage = [Number(ax.toFixed(1)), Number(ay.toFixed(1))];
 
-const markerIds = ['Vancouver', 'Creston', 'Seattle', 'Whitehorse', 'Yellowknife', 'Anchorage'];
-const markers = Object.fromEntries(cityDots.filter((city) => markerIds.includes(city.name)).map((city) => [city.name, [city.x, city.y]]));
+const mainPaths = Object.fromEntries(Object.entries(main.paths).map(([id, multi]) => [id, pathFor(multi)]));
+const alaskaPath = pathFor(alaska.paths.alaska);
 
 const payload = {
-  viewBox: `0 0 ${targetWidth} ${targetHeight}`,
-  width: targetWidth,
-  height: targetHeight,
-  paths: Object.fromEntries(Object.entries(paths).map(([id, multi]) => [id, pathFor(multi)])),
-  anchors,
+  viewBox: `0 0 ${main.width} ${main.height}`,
+  alaskaViewBox: `0 0 ${alaska.width} ${alaska.height}`,
+  paths: mainPaths,
+  anchors: main.anchors,
   markers,
+  anchorage,
+  alaskaPath,
 };
 
 writeFileSync('/tmp/geo/clock-map-paths.json', JSON.stringify(payload));
 const ts = `/* Generated by scripts/build-clock-map.mjs from Natural Earth 1:50m (public domain)
    and USDOT/BTS NTAD time-zone boundaries (public domain). Do not edit by hand. */
 export const clockMapViewBox = ${JSON.stringify(payload.viewBox)};
+export const alaskaViewBox = ${JSON.stringify(payload.alaskaViewBox)};
 export const clockMapPaths: Record<string, string> = ${JSON.stringify(payload.paths, null, 2)};
 export const clockMapAnchors: Record<string, [number, number]> = ${JSON.stringify(payload.anchors, null, 2)};
 export const clockMapMarkers: Record<string, [number, number]> = ${JSON.stringify(payload.markers, null, 2)};
+export const alaskaInsetPath = ${JSON.stringify(payload.alaskaPath)};
+export const anchorageMarker: [number, number] = ${JSON.stringify(payload.anchorage)};
 `;
 writeFileSync(new URL('../src/lib/clock-map-paths.ts', import.meta.url), ts);
-console.log('markers', markers);
+console.log('viewBox', payload.viewBox, 'alaska', payload.alaskaViewBox);
+console.log('markers', markers, 'anchorage', anchorage);
 
 const colors = {
-  bc: '#f0c654', neBc: '#d4a017', seBc: '#e76f51', alberta: '#e76f51', yukon: '#f0c654',
-  nwt: '#e76f51', saskatchewan: '#e76f51', washington: '#58a6ff', oregon: '#58a6ff',
-  malheur: '#e76f51', northIdaho: '#58a6ff', southIdaho: '#e76f51', montana: '#e76f51',
-  california: '#58a6ff', alaska: '#58a6ff',
+  bc: '#f0c654', neBc: '#f0c654', seBc: '#e36a45', alberta: '#e36a45', yukon: '#f0c654',
+  nwt: '#e36a45', saskatchewan: '#e36a45', washington: '#f0c654', oregon: '#f0c654',
+  malheur: '#e36a45', northIdaho: '#f0c654', southIdaho: '#e36a45', montana: '#e36a45',
+  california: '#f0c654', alaskaPanhandle: '#8ec8ff',
 };
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="${payload.viewBox}" width="${targetWidth}" height="${targetHeight}">
-  <rect width="100%" height="100%" fill="#0d1117"/>
-  ${Object.entries(payload.paths).map(([id, d]) => `<path d="${d}" fill="${colors[id]}" fill-rule="evenodd" stroke="#0d1117" stroke-width="1.2"/>`).join('\n')}
-  ${Object.entries(anchors).map(([id, [x, y]]) => `<text x="${x}" y="${y}" fill="#0d1117" font-size="14" text-anchor="middle">${id}</text>`).join('\n')}
-  ${cityDots.map((city) => `<g><circle cx="${city.x}" cy="${city.y}" r="2.2" fill="#fff"/><text x="${city.x + 4}" y="${city.y - 3}" fill="#fff" font-size="8">${city.name}</text></g>`).join('\n')}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${payload.viewBox}" width="${main.width}" height="${main.height}">
+  <rect width="100%" height="100%" fill="#10161d"/>
+  ${Object.entries(mainPaths).map(([id, d]) => `<path d="${d}" fill="${colors[id]}" fill-rule="evenodd" stroke="#f7f4ee" stroke-width="1.4" stroke-linejoin="round"/>`).join('\n')}
+  ${Object.entries(main.anchors).map(([id, [x, y]]) => `<text x="${x}" y="${y}" fill="#1a140c" font-size="18" font-family="sans-serif" text-anchor="middle">${id}</text>`).join('\n')}
+  ${Object.entries(markers).map(([name, [x, y]]) => `<g><circle cx="${x}" cy="${y}" r="4" fill="#fff" stroke="#1a140c"/><text x="${x + 6}" y="${y - 6}" fill="#fff" font-size="11">${name}</text></g>`).join('\n')}
 </svg>`;
 writeFileSync('/tmp/geo/preview.svg', svg);
+const alaskaSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${payload.alaskaViewBox}" width="${alaska.width}" height="${alaska.height}">
+  <rect width="100%" height="100%" fill="#10161d"/>
+  <path d="${alaskaPath}" fill="#8ec8ff" stroke="#f7f4ee" stroke-width="2"/>
+  <circle cx="${anchorage[0]}" cy="${anchorage[1]}" r="5" fill="#fff"/>
+</svg>`;
+writeFileSync('/tmp/geo/alaska.svg', alaskaSvg);
 console.log(failed ? 'CITY CHECKS FAILED' : 'CITY CHECKS PASSED');
 if (failed) process.exitCode = 2;
 

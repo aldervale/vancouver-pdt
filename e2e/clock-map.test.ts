@@ -36,12 +36,20 @@ test.describe('Regional clock map', () => {
       const novLabel = section.locator('.callout-washington .for-nov1').first();
       await expect(octLabel).toBeVisible();
       await expect(octLabel).toHaveText('10:00 AM');
-      await expect(novLabel).toBeHidden();
-      await section.locator('label').filter({ hasText: 'After 2 AM' }).click();
-      await expect(novLabel).toBeVisible();
-      await expect(novLabel).toHaveText('9:00 AM');
-      await expect(octLabel).toBeHidden();
-      await expect(section.locator('.callout-bc .for-nov1').first()).toHaveText('10:00 AM');
+      if (width >= 900) {
+        await expect(novLabel).toBeVisible();
+        await expect(novLabel).toHaveText('9:00 AM');
+        await expect(section.locator('.map-card.map-nov1 .callout-bc .for-nov1').first()).toHaveText('10:00 AM');
+        await expect(section.locator('.map-card.map-oct31 .callout-bc .for-oct31').first()).toHaveText('10:00 AM');
+        await expect(section.locator('.map-card.map-nov1 .callout-alaska .for-nov1').first()).toHaveText('8:00 AM');
+      } else {
+        await expect(novLabel).toBeHidden();
+        await section.locator('label').filter({ hasText: 'After 2 AM' }).click();
+        await expect(novLabel).toBeVisible();
+        await expect(novLabel).toHaveText('9:00 AM');
+        await expect(octLabel).toBeHidden();
+        await expect(section.locator('.callout-bc .for-nov1').first()).toHaveText('10:00 AM');
+      }
       const callouts = section.locator('.map-callout:visible');
       const count = await callouts.count();
       for (let i = 0; i < count; i++) {
@@ -50,7 +58,9 @@ test.describe('Regional clock map', () => {
         expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(width + 1);
       }
 
-      if (width === 390 || width === 1280) {
+      if (width === 1280) {
+        await section.screenshot({ path: `test-results/clock-map-${width}-both.png` });
+      } else if (width === 320 || width === 390) {
         await section.locator('label').filter({ hasText: 'Before the switch' }).click();
         await section.screenshot({ path: `test-results/clock-map-${width}-oct31.png` });
         await section.locator('label').filter({ hasText: 'After 2 AM' }).click();
@@ -80,7 +90,7 @@ test.describe('Regional clock map', () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto('http://127.0.0.1:4173/#regional-clocks');
     const section = page.locator('#regional-clocks');
-    await expect(section.getByRole('img', { name: /Clocks around B.C./ })).toBeVisible();
+    await expect(section.getByRole('img', { name: /Clocks around B.C./ }).first()).toBeVisible();
     await expect(section.locator('tr[data-region="montana"]')).toContainText('11:00 AM');
     await expect(section.locator('tr[data-region="montana"]')).toContainText('10:00 AM');
     await expect(section.locator('.callout-alaska .for-oct31').first()).toBeVisible();

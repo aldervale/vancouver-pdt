@@ -182,26 +182,6 @@ export function clockStamp(offset: number): string {
   return `${clockLabel(offset)} ${offsetLabel(offset)}`;
 }
 
-/** Percent positions hand-tuned on the 1000×1138 map. `dense` labels need a wider map. */
-export const mapCallouts: { id: string; x: number; y: number; dense?: boolean }[] = [
-  { id: 'alaska', x: 24, y: 27 },
-  { id: 'yukon', x: 43, y: 30 },
-  { id: 'nwt', x: 62, y: 15 },
-  { id: 'bc', x: 55, y: 52 },
-  { id: 'neBc', x: 61, y: 40, dense: true },
-  { id: 'alberta', x: 76, y: 50 },
-  { id: 'saskatchewan', x: 86, y: 42 },
-  { id: 'seBc', x: 71, y: 57, dense: true },
-  { id: 'creston', x: 66, y: 61, dense: true },
-  { id: 'washington', x: 57, y: 67 },
-  { id: 'oregon', x: 61, y: 75, dense: true },
-  { id: 'northIdaho', x: 79, y: 68, dense: true },
-  { id: 'montana', x: 88, y: 64, dense: true },
-  { id: 'southIdaho', x: 83, y: 73, dense: true },
-  { id: 'malheur', x: 74, y: 72.5, dense: true },
-  { id: 'california', x: 67, y: 91 },
-];
-
 export const changingZone = (id: string): 'pac' | 'mtn' | 'ak' | null => {
   const region = clockRegions.find((item) => item.id === id);
   if (!region || !regionChanges(region)) return null;
