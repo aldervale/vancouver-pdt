@@ -36,9 +36,9 @@ describe('Regional clock map', () => {
     expect(trigger.textContent).toContain('See the map: what time it is across the West on Oct 31 vs Nov 1');
     expect(trigger.textContent).toContain('See the map: Oct 31 vs Nov 1');
     expect(trigger).toHaveAccessibleName(/See the map/);
-    expect(policy).toHaveTextContent('before-and-after clock map');
+    expect(policy).toHaveTextContent('an hour ahead of Seattle');
     const mapLinks = [...policy.querySelectorAll('a[href="#regional-clocks"]')].map((link) => link.textContent);
-    expect(mapLinks).toEqual(['before-and-after clock map', 'Seattle']);
+    expect(mapLinks).toEqual(['an hour ahead of Seattle']);
   });
 
   it('opens the map dialog from the trigger and from the policy links', async () => {

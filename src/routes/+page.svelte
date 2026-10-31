@@ -737,16 +737,7 @@
 
   <section class="policy-update" aria-labelledby="policy-update-title">
     <h2 id="policy-update-title">What to know about Pacific Time</h2>
-    <p>The <a href="https://news.gov.bc.ca/releases/2026CITZ0009-001073" target="_blank" rel="noopener">September 17 provincial announcement</a>
-      introduced the PCT abbreviation for Pacific Time, replacing seasonal PST/PDT in applicable regions.
-      Local mountain-time arrangements differ; see the province's
-      <a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">regional guidance</a>
-      and the <a href="#regional-clocks">before-and-after clock map</a>.
-    </p>
-    <p>Under <a href="https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst" target="_blank" rel="noopener">current U.S. clock rules</a>,
-      Vancouver will be one hour ahead of <a href="#regional-clocks">Seattle</a> after the November 1 fall-back and aligned during U.S. daylight time.
-      Later evening light also means later winter sunrises, not an established health advantage over permanent standard time.
-    </p>
+    <p>B.C. stays on Pacific Time (PCT, UTC−7) all year, so clocks don't fall back on November 1. This winter, Vancouver is <a href="#regional-clocks">an hour ahead of Seattle</a>.</p>
   </section>
 
   <div class="controls-row">
@@ -1301,6 +1292,8 @@
       Waking window is user-configurable above.
       Vancouver's transition to year-round UTC−7 began March 8, 2026; the PCT abbreviation was announced September 17, 2026.
       Vancouver used PST until the March 8 clock change, including January and February. PCT is a public time-standard name, not an IANA time-zone identifier.
+      Local mountain-time arrangements differ; see the province's <a href="https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time" target="_blank" rel="noopener">regional guidance</a>.
+      Later evening light means later winter sunrises, not an established health advantage over permanent standard time.
     </div>
   </footer>
 </div>
@@ -1372,7 +1365,6 @@
   }
 
   .policy-update h2 { font-size: 17px; margin: 0 0 8px; }
-  .policy-update p + p { margin-top: 10px; }
   .policy-update a { color: var(--accent-gold); text-decoration: underline; }
 
   /* ─── Controls row ───────────────────────────────────── */

@@ -345,25 +345,28 @@ describe('Current Pacific Time policy and model scope', () => {
     expect(subtitle).not.toHaveTextContent(/is adopting|what.s coming/i);
   });
 
-  it('presents the September policy update, regional exceptions and official U.S. assumptions', () => {
-    render(Page);
+  it('keeps the policy card to the year-round change and the Seattle offset', () => {
+    const { container } = render(Page);
     const policy = screen.getByRole('region', { name: 'What to know about Pacific Time' });
-    expect(policy).toHaveTextContent('September 17');
-    expect(policy).toHaveTextContent(/mountain-time arrangements differ/i);
-    expect(policy).toHaveTextContent('one hour ahead of Seattle after the November 1 fall-back');
-    expect(policy).toHaveTextContent('aligned during U.S. daylight time');
-    expect(policy).toHaveTextContent('not an established health advantage over permanent standard time');
-    const sources = [
-      ['September 17 provincial announcement', 'https://news.gov.bc.ca/releases/2026CITZ0009-001073'],
-      ['regional guidance', 'https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time'],
-      ['current U.S. clock rules', 'https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst'],
-    ];
-    for (const [name, href] of sources) {
-      const link = screen.getByRole('link', { name });
-      expect(policy.contains(link)).toBe(true);
-      expect(link).toHaveAttribute('href', href);
-      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
-    }
+    expect(policy).toHaveTextContent("B.C. stays on Pacific Time (PCT, UTC−7) all year, so clocks don't fall back on November 1. This winter, Vancouver is an hour ahead of Seattle.");
+    expect(policy.querySelectorAll('p')).toHaveLength(1);
+    expect(policy.querySelectorAll('a')).toHaveLength(1);
+    const mapLink = screen.getByRole('link', { name: 'an hour ahead of Seattle' });
+    expect(policy.contains(mapLink)).toBe(true);
+    expect(mapLink).toHaveAttribute('href', '#regional-clocks');
+
+    const credit = container.querySelector('.footer-credit')!;
+    expect(credit).toHaveTextContent('Local mountain-time arrangements differ');
+    const guidance = screen.getByRole('link', { name: 'regional guidance' });
+    expect(credit.contains(guidance)).toBe(true);
+    expect(guidance).toHaveAttribute('href', 'https://www2.gov.bc.ca/gov/content/governments/celebrating-british-columbia/daylight-saving-time');
+    expect(guidance).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    expect(credit).toHaveTextContent('Later evening light means later winter sunrises, not an established health advantage over permanent standard time');
+
+    const announcement = screen.getByRole('link', { name: 'Official Pacific Time (PCT) announcement' });
+    expect(policy.contains(announcement)).toBe(false);
+    expect(announcement).toHaveAttribute('href', 'https://news.gov.bc.ca/releases/2026CITZ0009-001073');
+    expect(container.querySelector('#ref-nist')).toHaveTextContent('Current U.S. daylight saving time rules');
   });
 
   it('keeps the full-year history caveat in the notes, not above the chart', () => {
