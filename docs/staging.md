@@ -38,7 +38,7 @@ The job fails if any of these are untrue after the deploy:
 - a disallowed Host is still rejected with 421
 - `/ping`, `/ready`, and the gateway `robots.txt` still answer as they do now, and `/og.png` stays behind sign-in
 
-If the check fails after the machine was updated, the job puts the previous image and session env back.
+If the running gateway config cannot be read or patched, the job fails before building an image or updating the machine. Session environment variables are not a fallback, because the Node supervisor does not apply them. If a check fails after the machine was updated, the job puts back the previous image, the previous command fields (including `init.cmd`), and the previous session env.
 
 ## One-time setup
 

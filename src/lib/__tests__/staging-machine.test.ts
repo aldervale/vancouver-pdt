@@ -19,6 +19,7 @@ import {
   parseEnvFile,
   patchProxyText,
   planStagingUpdate,
+  proceedToDeploy,
   redactSecrets,
   selectStagingMachine
 } from '../../../scripts/staging-machine.mjs';
@@ -339,6 +340,97 @@ function programSection(text, name) {
   return lines.slice(start, end).join('\n');
 }
 
+function changedPaths(before, after, prefix = '') {
+  if (Object.is(before, after)) return [];
+  const bothObjects =
+    before !== null &&
+    after !== null &&
+    typeof before === 'object' &&
+    typeof after === 'object' &&
+    !Array.isArray(before) &&
+    !Array.isArray(after);
+  if (!bothObjects) {
+    return JSON.stringify(before) === JSON.stringify(after) ? [] : [prefix || '(root)'];
+  }
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const paths = [];
+  for (const key of keys) {
+    paths.push(...changedPaths(before[key], after[key], prefix ? `${prefix}.${key}` : key));
+  }
+  return paths;
+}
+
+function readPath(value, path) {
+  return path.split('.').reduce((current, key) => current?.[key], value);
+}
+
+describe('gateway config gate', () => {
+  const proxyFile = { path: '/etc/oauth2-proxy.cfg', text: proxyConfig };
+
+  function trackedDeploy() {
+    const steps = [];
+    return {
+      steps,
+      deploy(prepared) {
+        steps.push('build-image', 'update-machine');
+        return prepared;
+      }
+    };
+  }
+
+  it('aborts before any deploy step when the gateway config cannot be read', () => {
+    const unreadables = [
+      [],
+      [{ path: '/etc/oauth2-proxy.cfg', unreadable: true, error: 'permission denied' }],
+      [{ path: '(staging gateway)', unreadable: true, error: 'exec failed' }],
+      [proxyFile, { path: '/etc/supervisord.conf', unreadable: true, error: 'permission denied' }]
+    ];
+    for (const files of unreadables) {
+      const run = trackedDeploy();
+      expect(() => proceedToDeploy(files, run.deploy)).toThrow(/Refusing to deploy/);
+      expect(() => proceedToDeploy(files, run.deploy)).toThrow(/not a fallback/);
+      expect(() => proceedToDeploy(files, run.deploy)).toThrow(/was not updated/);
+      expect(run.steps).toEqual([]);
+    }
+  });
+
+  it('aborts before any deploy step when the gateway config cannot be patched', () => {
+    const headerOnly = { path: '/etc/nginx/oauth2.conf', text: gatewayHeaders };
+    const removesPolicy = {
+      path: '/etc/oauth2-proxy.cfg',
+      text: 'provider = "github"\ncookie_expire = "max-age=86400"\ngithub_users = ["aldervale"]\n'
+    };
+    for (const files of [[headerOnly], [removesPolicy]]) {
+      const run = trackedDeploy();
+      expect(() => proceedToDeploy(files, run.deploy)).toThrow(/could not be patched/);
+      expect(() => proceedToDeploy(files, run.deploy)).toThrow(/was not updated/);
+      expect(() => proceedToDeploy(files, run.deploy)).toThrow(/not a fallback/);
+      expect(run.steps).toEqual([]);
+    }
+
+    const deploy = readFileSync(resolve(process.cwd(), 'scripts/deploy-staging.mjs'), 'utf8');
+    expect(deploy).not.toContain('Session env will still be applied');
+    expect(deploy).not.toContain('Gateway config files were not readable');
+    expect(deploy).not.toContain('Skipping unreadable config');
+    const gate = deploy.indexOf('await proceedToDeploy');
+    expect(gate).toBeGreaterThan(-1);
+    const afterGate = deploy.slice(gate);
+    expect(afterGate.indexOf('await buildOverlay')).toBeGreaterThan(0);
+    expect(afterGate.indexOf('await updateMachine')).toBeGreaterThan(0);
+    expect(afterGate.indexOf('await buildOverlay')).toBeLessThan(afterGate.indexOf('await updateMachine'));
+  });
+
+  it('starts deploy steps only after the gateway config is patched', () => {
+    const run = trackedDeploy();
+    const prepared = proceedToDeploy([proxyFile, { path: '/etc/nginx.conf', text: gatewayHeaders }], run.deploy);
+    expect(run.steps).toEqual(['build-image', 'update-machine']);
+    expect(prepared.files[0].text).toContain('cookie_expire = "8h"');
+    expect(prepared.files[0].text).toContain('cookie_refresh = "0s"');
+    expect(prepared.files[0].text).toContain('approval_prompt = "auto"');
+    expect(prepared.files[1].changed).toBe(false);
+  });
+});
+
 describe('machine update plan', () => {
   it('replaces only the staging image and preserves headers, hosts, and other env', () => {
     const current = machineConfig();
@@ -370,13 +462,67 @@ describe('machine update plan', () => {
     expect(rollback.env.OAUTH2_PROXY_COOKIE_EXPIRE).toBe('1h');
     expect(rollback.env.OAUTH2_PROXY_CLIENT_SECRET).toBeUndefined();
 
-    const restored = applyRollback(config, rollback);
+    const restored = applyRollback(config, JSON.parse(JSON.stringify(rollback)));
+    expect(restored).toEqual(current);
+    expect(restored.init.cmd).toEqual(current.init.cmd);
+    expect(restored.init.cmd[0]).toContain('--approval-prompt=force');
     expect(restored.image).toBe(oldImage);
     expect(restored.services).toEqual(current.services);
     expect(restored.containers[1].image).toBe('registry.fly.io/other-logger:1');
     expect(restored.env.OAUTH2_PROXY_CLIENT_SECRET).toBe('super-secret-value');
     expect(restored.env.OAUTH2_PROXY_COOKIE_EXPIRE).toBe('1h');
     expect(restored.env.COMMIT_SHA).toBeUndefined();
+  });
+
+  it('restores every command field the deploy changed, including init.cmd', () => {
+    const current = machineConfig();
+    current.init.entrypoint = '/usr/bin/oauth2-proxy --approval-prompt=force --github-user=aldervale';
+    current.init.exec = 'oauth2-proxy --cookie-expire=1h --approval-prompt=force --github-user=aldervale';
+    current.command = 'oauth2-proxy --approval-prompt=force --cookie-refresh=1h --github-user=aldervale';
+    current.cmd = ['oauth2-proxy --cookie-expire=1h --approval-prompt=force --github-user=aldervale'];
+    current.entrypoint = ['/usr/local/bin/oauth2-proxy', '--approval-prompt=force', '--github-user=aldervale'];
+    current.exec = 'oauth2-proxy --approval-prompt=force --github-user=aldervale';
+    current.processes = [
+      {
+        command: 'oauth2-proxy --approval-prompt=force --github-user=aldervale',
+        cmd: 'oauth2-proxy --cookie-expire=1h --approval-prompt=force --github-user=aldervale',
+        entrypoint: '/usr/bin/oauth2-proxy --cookie-refresh=1h --approval-prompt=force --github-user=aldervale',
+        exec: 'oauth2-proxy --approval-prompt=force --github-user=aldervale'
+      }
+    ];
+    current.containers[0].command = 'oauth2-proxy --approval-prompt=force --cookie-expire=1h --github-user=aldervale';
+    current.containers[0].cmd = ['oauth2-proxy --approval-prompt=force --github-user=aldervale'];
+    current.containers[0].entrypoint = '/usr/local/bin/oauth2-proxy --approval-prompt=force --github-user=aldervale';
+    current.containers[0].exec = 'oauth2-proxy --cookie-refresh=1h --approval-prompt=force --github-user=aldervale';
+    const original = structuredClone(current);
+    const sessionEnv = assertSessionEnv(parseEnvFile(readFileSync(sessionFile, 'utf8')));
+    const { config, rollback } = planStagingUpdate(current, {
+      image: newImage,
+      sessionEnv,
+      skipRoutes: '^/robots\\.txt$',
+      commitSha: sha
+    });
+
+    const changed = changedPaths(original, config);
+    expect(changed).toEqual(expect.arrayContaining(['init.cmd', 'init.entrypoint', 'init.exec']));
+    expect(changed).toEqual(
+      expect.arrayContaining(['command', 'cmd', 'entrypoint', 'exec', 'processes', 'image', 'containers'])
+    );
+    expect(config.init.cmd[0]).toContain('--approval-prompt=auto');
+    expect(config.init.cmd[0]).not.toContain('approval-prompt=force');
+    expect(config.containers[0].command).not.toEqual(original.containers[0].command);
+    expect(config.containers[0].cmd).not.toEqual(original.containers[0].cmd);
+    expect(config.containers[0].entrypoint).not.toEqual(original.containers[0].entrypoint);
+    expect(config.containers[0].exec).not.toEqual(original.containers[0].exec);
+    expect(config.processes).not.toEqual(original.processes);
+
+    const restored = applyRollback(config, JSON.parse(JSON.stringify(rollback)));
+    expect(changedPaths(original, restored)).toEqual([]);
+    expect(restored).toEqual(original);
+    for (const path of changed) {
+      expect(readPath(restored, path)).toEqual(readPath(original, path));
+    }
+    expect(restored.init.cmd).toEqual(original.init.cmd);
   });
 
   it('refuses a production image', () => {

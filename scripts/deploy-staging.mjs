@@ -18,7 +18,6 @@ import {
   VERSION_SKIP_ROUTE,
   applyRollback,
   assertBuildContainsCommit,
-  assertPatchPreservesGatewayPolicy,
   assertSessionEnv,
   assertStagingApp,
   assertStagingImageRef,
@@ -28,8 +27,8 @@ import {
   isSafeConfigPath,
   mergeSkipRoutes,
   parseEnvFile,
-  patchProxyText,
   planStagingUpdate,
+  proceedToDeploy,
   redactSecrets,
   selectStagingMachine
 } from './staging-machine.mjs';
@@ -196,59 +195,85 @@ async function rollbackFromFile() {
   await updateMachine({ id: saved.machineId, region: machine.region }, restored);
   saved.applied = false;
   await writeRollback(saved);
-  log('Rollback requested. Staging is returning to the previous image and session env.');
+  log('Rollback requested. Staging is returning to the previous image, command, and session env.');
 }
 
-async function discoverProxyFiles(machineId) {
-  const paths = new Set();
+async function readGatewayConfigFiles(machineId) {
+  let listing = '';
   try {
-    const listing = await execMachine(machineId, [
+    listing = await execMachine(machineId, [
       'sh',
       '-c',
       'ps -eo args=; echo; find /etc /opt /app /usr/local/etc /srv -type f \\( -iname "*oauth2*" -o -name supervisord.conf -o -name oauth2-proxy.cfg \\) -size -256k 2>/dev/null'
     ]);
-    for (const path of configPathsFromProcessList(listing)) paths.add(path);
-    for (const line of listing.split('\n')) {
-      const candidate = line.trim();
-      if (isSafeConfigPath(candidate) && /oauth|supervisord/i.test(candidate)) paths.add(candidate);
-    }
   } catch (error) {
-    log(
-      `Could not list gateway files (${error instanceof Error ? error.message : 'exec failed'}). Session env will still be applied.`
-    );
+    return [
+      {
+        path: '(staging gateway)',
+        unreadable: true,
+        error: error instanceof Error ? error.message : 'exec failed'
+      }
+    ];
   }
-  return [...paths];
-}
 
-async function patchedProxyRoot(machineId, work, paths) {
-  const rootDir = resolve(work, 'proxy-root');
-  const originals = [];
-  let changed = 0;
+  const paths = new Set();
+  for (const configPath of configPathsFromProcessList(listing)) paths.add(configPath);
+  for (const line of listing.split('\n')) {
+    const candidate = line.trim();
+    if (isSafeConfigPath(candidate) && /oauth|supervisord/i.test(candidate)) paths.add(candidate);
+  }
+  if (paths.size === 0) return [];
+
+  const files = [];
   for (const configPath of paths) {
-    if (!isSafeConfigPath(configPath)) continue;
+    if (!isSafeConfigPath(configPath)) {
+      files.push({ path: configPath, unreadable: true, error: 'unsafe path' });
+      continue;
+    }
     let encoded = '';
     try {
       encoded = await execMachine(machineId, ['sh', '-c', `base64 < ${JSON.stringify(configPath)}`]);
-    } catch {
-      log(`Skipping unreadable config ${configPath}`);
+    } catch (error) {
+      files.push({
+        path: configPath,
+        unreadable: true,
+        error: error instanceof Error ? error.message : 'exec failed'
+      });
       continue;
     }
-    const raw = Buffer.from(encoded.replace(/\s+/g, ''), 'base64');
-    if (raw.includes(0) || raw.length > 256 * 1024) continue;
-    const text = raw.toString('utf8');
-    const patched = patchProxyText(text);
-    assertPatchPreservesGatewayPolicy(text, patched.text);
-    originals.push(text);
-    if (!patched.changed) continue;
-    const relative = configPath.replace(/^\/+/, '');
-    const destination = resolve(rootDir, relative);
-    if (!destination.startsWith(rootDir)) continue;
-    await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, patched.text, { mode: 0o644 });
-    changed += 1;
-    log(`Patched staging session settings in ${configPath}`);
+    const raw = Buffer.from(String(encoded).replace(/\s+/g, ''), 'base64');
+    if (raw.length === 0 || raw.includes(0) || raw.length > 256 * 1024) {
+      files.push({ path: configPath, unreadable: true, error: 'unreadable contents' });
+      continue;
+    }
+    files.push({ path: configPath, text: raw.toString('utf8') });
   }
-  return { changed, originals };
+  return files;
+}
+
+async function writePatchedProxyRoot(work, files) {
+  const rootDir = resolve(work, 'proxy-root');
+  let changed = 0;
+  for (const file of files) {
+    if (!file.changed) continue;
+    if (!isSafeConfigPath(file.path)) {
+      throw new Error(
+        `Refusing to deploy: gateway config ${file.path} cannot be written into the overlay. The running machine was not updated.`
+      );
+    }
+    const relative = file.path.replace(/^\/+/, '');
+    const destination = resolve(rootDir, relative);
+    if (destination !== rootDir && !destination.startsWith(`${rootDir}/`)) {
+      throw new Error(
+        `Refusing to deploy: patched gateway path ${file.path} escapes the overlay. The running machine was not updated.`
+      );
+    }
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, file.text, { mode: 0o644 });
+    changed += 1;
+    log(`Patched staging session settings in ${file.path}`);
+  }
+  return changed;
 }
 
 async function writeDockerfile(work, includeProxyRoot) {
@@ -344,55 +369,62 @@ async function deploy() {
     log(`Before-probe skipped (${error instanceof Error ? error.message : 'request failed'})`);
   }
 
-  const paths = await discoverProxyFiles(machine.id);
+  const gatewayFiles = await readGatewayConfigFiles(machine.id);
   const work = resolve(root, 'deploy/staging/.overlay');
-  await rm(work, { recursive: true, force: true });
-  await mkdir(resolve(work, 'app-build'), { recursive: true });
-  await run('cp', ['-a', `${resolve(root, 'build')}/.`, resolve(work, 'app-build')]);
-  const patched = await patchedProxyRoot(machine.id, work, paths);
-  const skipRoutes = mergeSkipRoutes(patched.originals.flatMap((text) => collectSkipRoutes(text)));
-  if (!skipRoutes.split(',').includes(VERSION_SKIP_ROUTE)) {
-    throw new Error('Refusing to deploy without a /version auth exception');
-  }
-  if (patched.originals.length === 0) {
-    log(
-      'Gateway config files were not readable. The skip list sent to the proxy is only ^/version$. Built-in /ping, /ready, and /robots.txt stay outside that list and are checked after deploy.'
-    );
-  }
-  log(`oauth2-proxy skip routes for this deploy: ${skipRoutes}`);
-
-  const image = await buildOverlay(baseImage, work, patched.changed > 0);
-  const planned = planStagingUpdate(machine.config, {
-    image,
-    sessionEnv,
-    skipRoutes,
-    commitSha
-  });
-  planned.rollback.machineId = machine.id;
-  planned.rollback.applied = false;
-  assertRollbackIsSafe(planned.rollback);
-  await writeRollback(planned.rollback);
-
-  log(`Updating ${STAGING_APP} machine ${machine.id}`);
-  await updateMachine({ id: machine.id, region: machine.region }, planned.config);
-  planned.rollback.applied = true;
-  await writeRollback(planned.rollback);
-
   try {
-    await checkStaging({ expectedSha: commitSha, before });
-    log('Staging deploy ok');
-    log(`app: ${STAGING_APP}`);
-    log(`machine: ${machine.id}`);
-    log(`image: ${image}`);
-    log(`commit: ${commitSha}`);
-    log(`version: ${STAGING_ORIGIN}/version`);
-    log(
-      `session: ${sessionEnv.OAUTH2_PROXY_COOKIE_EXPIRE}, refresh ${sessionEnv.OAUTH2_PROXY_COOKIE_REFRESH}, approval ${sessionEnv.OAUTH2_PROXY_APPROVAL_PROMPT}`
-    );
-  } catch (error) {
-    log(error instanceof Error ? error.message : 'Staging checks failed');
-    await rollbackFromFile();
-    throw error;
+    await proceedToDeploy(gatewayFiles, async (prepared) => {
+      const skipRoutes = mergeSkipRoutes(prepared.files.flatMap((file) => collectSkipRoutes(file.original)));
+      if (!skipRoutes.split(',').includes(VERSION_SKIP_ROUTE)) {
+        throw new Error(
+          'Refusing to deploy without a /version auth exception. The running machine was not updated.'
+        );
+      }
+      log(`oauth2-proxy skip routes for this deploy: ${skipRoutes}`);
+
+      await rm(work, { recursive: true, force: true });
+      await mkdir(resolve(work, 'app-build'), { recursive: true });
+      await run('cp', ['-a', `${resolve(root, 'build')}/.`, resolve(work, 'app-build')]);
+      const pending = prepared.files.filter((file) => file.changed).length;
+      const changed = await writePatchedProxyRoot(work, prepared.files);
+      if (changed !== pending) {
+        throw new Error(
+          'Refusing to deploy: the patched gateway config was not written. The running machine was not updated.'
+        );
+      }
+      const image = await buildOverlay(baseImage, work, changed > 0);
+      const planned = planStagingUpdate(machine.config, {
+        image,
+        sessionEnv,
+        skipRoutes,
+        commitSha
+      });
+      planned.rollback.machineId = machine.id;
+      planned.rollback.applied = false;
+      assertRollbackIsSafe(planned.rollback);
+      await writeRollback(planned.rollback);
+
+      log(`Updating ${STAGING_APP} machine ${machine.id}`);
+      await updateMachine({ id: machine.id, region: machine.region }, planned.config);
+      planned.rollback.applied = true;
+      await writeRollback(planned.rollback);
+
+      try {
+        await checkStaging({ expectedSha: commitSha, before });
+        log('Staging deploy ok');
+        log(`app: ${STAGING_APP}`);
+        log(`machine: ${machine.id}`);
+        log(`image: ${image}`);
+        log(`commit: ${commitSha}`);
+        log(`version: ${STAGING_ORIGIN}/version`);
+        log(
+          `session: ${sessionEnv.OAUTH2_PROXY_COOKIE_EXPIRE}, refresh ${sessionEnv.OAUTH2_PROXY_COOKIE_REFRESH}, approval ${sessionEnv.OAUTH2_PROXY_APPROVAL_PROMPT}`
+        );
+      } catch (error) {
+        log(error instanceof Error ? error.message : 'Staging checks failed');
+        await rollbackFromFile();
+        throw error;
+      }
+    });
   } finally {
     await rm(work, { recursive: true, force: true });
   }

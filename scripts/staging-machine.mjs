@@ -412,16 +412,31 @@ function snapshotEnv(env) {
   return snap;
 }
 
+/** Fields planStagingUpdate rewrites on the machine, besides image and env. */
+const TOP_LEVEL_COMMAND_KEYS = ['init', 'processes', 'command', 'cmd', 'entrypoint', 'exec'];
+const CONTAINER_COMMAND_KEYS = ['command', 'cmd', 'entrypoint', 'exec'];
+
+function snapshotFields(source, keys) {
+  const snap = {};
+  const record = source && typeof source === 'object' ? source : {};
+  for (const key of keys) {
+    snap[key] = Object.prototype.hasOwnProperty.call(record, key) ? structuredClone(record[key]) : null;
+  }
+  return snap;
+}
+
 export function captureRollback(config, machineId) {
   const containers = Array.isArray(config.containers) ? config.containers : [];
   return {
     machineId,
     image: typeof config.image === 'string' ? config.image : null,
     env: snapshotEnv(config.env),
+    commands: snapshotFields(config, TOP_LEVEL_COMMAND_KEYS),
     containers: containers.map((container) => ({
       name: container.name || null,
       image: typeof container.image === 'string' ? container.image : null,
-      env: snapshotEnv(container.env)
+      env: snapshotEnv(container.env),
+      commands: snapshotFields(container, CONTAINER_COMMAND_KEYS)
     }))
   };
 }
@@ -513,15 +528,26 @@ export function planStagingUpdate(config, { image, sessionEnv, skipRoutes, commi
 
   if (next.init) next.init = patchCommandTree(next.init);
   if (Array.isArray(next.processes)) next.processes = patchCommandTree(next.processes);
+  for (const key of CONTAINER_COMMAND_KEYS) {
+    if (next[key]) next[key] = patchCommandTree(next[key]);
+  }
   if (Array.isArray(next.containers)) {
     for (const container of next.containers) {
-      for (const key of ['command', 'cmd', 'entrypoint', 'exec']) {
+      for (const key of CONTAINER_COMMAND_KEYS) {
         if (container[key]) container[key] = patchCommandTree(container[key]);
       }
     }
   }
 
   return { config: next, rollback };
+}
+
+function restoreFields(target, snap) {
+  if (!snap || typeof snap !== 'object') return;
+  for (const [key, value] of Object.entries(snap)) {
+    if (value === null) delete target[key];
+    else target[key] = structuredClone(value);
+  }
 }
 
 export function applyRollback(config, rollback) {
@@ -534,6 +560,7 @@ export function applyRollback(config, rollback) {
     next.image = rollback.image;
   }
   if (next.env) next.env = restoreEnv(next.env, rollback.env || {});
+  restoreFields(next, rollback.commands);
   if (Array.isArray(next.containers) && Array.isArray(rollback.containers)) {
     for (const saved of rollback.containers) {
       const container = next.containers.find((item) => (item.name || null) === saved.name);
@@ -545,9 +572,70 @@ export function applyRollback(config, rollback) {
         container.image = saved.image;
       }
       container.env = restoreEnv(container.env, saved.env || {});
+      restoreFields(container, saved.commands);
     }
   }
   return next;
+}
+
+const REFUSING_TO_DEPLOY =
+  'Session environment variables are not a fallback. The running machine was not updated.';
+
+function gatewaySessionApplied(text) {
+  const expire = /(?:cookie_expire\s*[:=]\s*"8h"|--cookie-expire=8h|OAUTH2_PROXY_COOKIE_EXPIRE="8h")/.test(text);
+  const refresh = /(?:cookie_refresh\s*[:=]\s*"0s"|--cookie-refresh=0s|OAUTH2_PROXY_COOKIE_REFRESH="0s")/.test(text);
+  const approval = /(?:approval_prompt\s*[:=]\s*"auto"|--approval-prompt=auto|OAUTH2_PROXY_APPROVAL_PROMPT="auto")/.test(
+    text
+  );
+  return expire && refresh && approval;
+}
+
+/**
+ * Read results are `{ path, text }` or `{ path, unreadable: true, error }`.
+ * Throws before any image build or machine update when the gateway config
+ * cannot be read or patched. Fly machine env is not a fallback.
+ */
+export function requirePatchedGatewayConfigs(files) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error(
+      `Refusing to deploy: the staging gateway config could not be read. ${REFUSING_TO_DEPLOY}`
+    );
+  }
+
+  const patched = [];
+  for (const file of files) {
+    const path = file?.path || '(unknown)';
+    if (!file || file.unreadable || typeof file.text !== 'string') {
+      const reason = file?.error ? ` (${file.error})` : '';
+      throw new Error(
+        `Refusing to deploy: gateway config ${path} could not be read${reason}. ${REFUSING_TO_DEPLOY}`
+      );
+    }
+    let result;
+    try {
+      result = patchProxyText(file.text);
+      assertPatchPreservesGatewayPolicy(file.text, result.text);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'patch failed';
+      throw new Error(
+        `Refusing to deploy: gateway config ${path} could not be patched (${reason}). ${REFUSING_TO_DEPLOY}`
+      );
+    }
+    patched.push({ path, original: file.text, text: result.text, changed: result.changed });
+  }
+
+  if (!patched.some((file) => gatewaySessionApplied(file.text))) {
+    throw new Error(
+      `Refusing to deploy: the staging gateway config could not be patched with the 8 hour session. ${REFUSING_TO_DEPLOY}`
+    );
+  }
+  return { files: patched };
+}
+
+/** Calls deploy only after the gateway config was read and patched. */
+export function proceedToDeploy(files, deploy) {
+  const prepared = requirePatchedGatewayConfigs(files);
+  return deploy(prepared);
 }
 
 export function selectStagingMachine(machines) {
