@@ -1,0 +1,6 @@
+# Copy the tested SvelteKit build onto the image already running on
+# bcdaylight-staging. The gateway, host rules, and response headers stay in
+# the lower layers. Do not point this file at the production app.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY app-build/ /app/build/
