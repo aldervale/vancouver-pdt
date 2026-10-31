@@ -247,9 +247,23 @@
     aria-controls="regional-clocks-dialog"
     onclick={onTriggerClick}
   >
-    <svg class="trigger-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <circle cx="12" cy="12" r="7.25" fill="none" stroke="currentColor" stroke-width="1.75" />
-      <path d="M12 8.5V12.2l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+    <svg class="trigger-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        fill-opacity="0.16"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+        d="M2.6 8.4 7.4 3.4 12 8.4 16.6 3.4 21.4 8.4v8.2l-4.8 4.6L12 16.6 7.4 21.2 2.6 16.6Z"
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        d="M7.4 3.4v17.8M16.6 3.4v17.8"
+      />
     </svg>
     <span class="trigger-label">
       <span class="label-long">See the map: what time it is across the West on Oct 31 vs Nov 1</span>
@@ -427,7 +441,13 @@
   .trigger-icon,
   .trigger-chevron {
     flex: none;
+    display: block;
     color: var(--accent-gold);
+  }
+
+  .trigger-icon {
+    width: 1.15em;
+    height: 1.15em;
   }
 
   .trigger-label {

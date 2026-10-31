@@ -40,9 +40,35 @@ test.describe('Regional clock map', () => {
         ? 'See the map: what time it is across the West on Oct 31 vs Nov 1'
         : 'See the map: Oct 31 vs Nov 1';
       await expect(trigger).toHaveAccessibleName(expectedName);
+      const icon = trigger.locator('svg.trigger-icon');
+      await expect(icon).toHaveCount(1);
+      await expect(icon).toBeVisible();
+      await expect(icon).toHaveAttribute('aria-hidden', 'true');
+      const iconUsesCurrentColor = await icon.evaluate((el) => {
+        const shapes = [...el.querySelectorAll('path')];
+        return shapes.length > 0 && shapes.every((shape) => {
+          const stroke = shape.getAttribute('stroke');
+          const fill = shape.getAttribute('fill');
+          return stroke === 'currentColor' && (fill === 'currentColor' || fill === 'none');
+        });
+      });
+      expect(iconUsesCurrentColor).toBe(true);
 
       const triggerBox = await trigger.boundingBox();
       expect(triggerBox).not.toBeNull();
+      const iconBox = await icon.boundingBox();
+      const labelBox = await trigger.locator('.trigger-label').boundingBox();
+      expect(iconBox).not.toBeNull();
+      expect(labelBox).not.toBeNull();
+      expect(iconBox!.x).toBeGreaterThanOrEqual(triggerBox!.x);
+      expect(iconBox!.x + iconBox!.width).toBeLessThanOrEqual(labelBox!.x + 1);
+      const iconMid = iconBox!.y + iconBox!.height / 2;
+      const labelMid = labelBox!.y + labelBox!.height / 2;
+      expect(Math.abs(iconMid - labelMid)).toBeLessThan(2);
+      const fontSize = await trigger.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      expect(iconBox!.width).toBeGreaterThanOrEqual(fontSize * 0.95);
+      expect(iconBox!.width).toBeLessThanOrEqual(fontSize * 1.3);
+      expect(iconBox!.height).toBeLessThanOrEqual(fontSize * 1.3);
       const oneLine = await trigger.evaluate((el) => {
         const style = getComputedStyle(el);
         const line = parseFloat(style.lineHeight);
@@ -61,6 +87,9 @@ test.describe('Regional clock map', () => {
 
       if (width === 320 || width === 390 || width === 1280) {
         await page.screenshot({ path: `${artifacts}/clock_map_collapsed_${width}.png` });
+      }
+      if (width === 390 || width === 1280) {
+        await trigger.screenshot({ path: `${artifacts}/map_button_${width}.png` });
       }
 
       const scrollBefore = await page.evaluate(() => window.scrollY);

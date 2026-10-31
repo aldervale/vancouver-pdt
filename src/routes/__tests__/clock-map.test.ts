@@ -35,7 +35,20 @@ describe('Regional clock map', () => {
     expect(trigger).toHaveAttribute('commandfor', 'regional-clocks-dialog');
     expect(trigger.textContent).toContain('See the map: what time it is across the West on Oct 31 vs Nov 1');
     expect(trigger.textContent).toContain('See the map: Oct 31 vs Nov 1');
-    expect(trigger).toHaveAccessibleName(/See the map/);
+    expect(trigger).toHaveAccessibleName('See the map: what time it is across the West on Oct 31 vs Nov 1 See the map: Oct 31 vs Nov 1');
+    const icon = trigger.querySelector('svg.trigger-icon');
+    expect(icon).not.toBeNull();
+    expect(trigger.firstElementChild).toBe(icon);
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(icon?.getAttribute('aria-label')).toBeNull();
+    expect(icon?.querySelector('title')).toBeNull();
+    const painted = [...icon!.querySelectorAll('path')];
+    expect(painted.length).toBeGreaterThan(0);
+    for (const shape of painted) {
+      expect(shape.getAttribute('stroke')).toBe('currentColor');
+      const fill = shape.getAttribute('fill');
+      expect(fill === 'currentColor' || fill === 'none').toBe(true);
+    }
     expect(policy.querySelectorAll('a')).toHaveLength(0);
     const notes = container.querySelector('footer .footer-credit')!;
     const mapLinks = [...notes.querySelectorAll('a[href="#regional-clocks"]')].map((link) => link.textContent);
