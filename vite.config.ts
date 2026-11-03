@@ -4,12 +4,10 @@ import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 const commitSha = process.env.COMMIT_SHA || 'dev';
-const buildTime = process.env.BUILD_TIME || 'unknown';
 
 export default defineConfig({
   define: {
-    __BC_COMMIT_SHA__: JSON.stringify(commitSha),
-    __BC_BUILD_TIME__: JSON.stringify(buildTime)
+    __BC_COMMIT_SHA__: JSON.stringify(commitSha)
   },
   plugins: [tailwindcss(), sveltekit()],
   test: {

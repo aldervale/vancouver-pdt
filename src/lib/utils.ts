@@ -61,6 +61,40 @@ export function fmtDayLength(hours: number): string {
   return `${h}h ${m}m`;
 }
 
+// The daylight chart labels 5 AM–2 AM and keeps one unlabeled hour above the
+// first tick. Views stay on that scale unless a curve would pass a label.
+const CHART_LABEL_MIN = 5;
+const CHART_LABEL_MAX = 26;
+const CHART_TOP_PAD_HOURS = 1;
+
+export function daylightChartAxis(samples: { sunrise: number; sunset: number }[]): {
+  yMin: number;
+  yMax: number;
+  labelMin: number;
+  labelMax: number;
+} {
+  if (samples.length === 0) {
+    return {
+      yMin: CHART_LABEL_MIN - CHART_TOP_PAD_HOURS,
+      yMax: CHART_LABEL_MAX,
+      labelMin: CHART_LABEL_MIN,
+      labelMax: CHART_LABEL_MAX,
+    };
+  }
+
+  const curveMin = Math.min(...samples.map(sample => sample.sunrise));
+  const curveMax = Math.max(...samples.map(sample => sample.sunset));
+  // Floor/ceil snap outward so a 4:08 sunrise is under a 4 AM tick, not past 5 AM.
+  const labelMin = Math.min(CHART_LABEL_MIN, Math.floor(curveMin));
+  const labelMax = Math.max(CHART_LABEL_MAX, Math.ceil(curveMax));
+  return {
+    yMin: labelMin - CHART_TOP_PAD_HOURS,
+    yMax: labelMax,
+    labelMin,
+    labelMax,
+  };
+}
+
 export function generateDailyData(offsetFn: (date: Date) => number): DayData[] {
   const result: DayData[] = [];
   for (let month = 0; month < 12; month++) {
