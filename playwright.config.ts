@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: 'staging-public.test.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,

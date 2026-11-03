@@ -2,11 +2,11 @@
 
 Private staging is the Fly app `bcdaylight-staging` at <https://bc-daylight.staging.adamstuckert.com>. Production (`vancouver-pdt`, bcdaylight.ca, root `fly.toml`) stays manual. This workflow never deploys it.
 
-The site content to deploy is commit `74c30b30f6e5db372d032f8b4c39e6b6df34c43a` plus the automation on this branch. Push that commit to the `staging` branch. Do not push `master` to `staging`.
+Choose an explicitly approved full commit SHA for each deployment. Updating `master` or a pull-request branch does not deploy either environment; do not push to `staging` merely to reconcile source history.
 
-## What is running today
+## Original gateway observations (before automation)
 
-Checked without signing in on 31 October 2026. The gateway is not defined in this repo. Deploys must leave it in place.
+Baseline checked without signing in on 31 October 2026, before applying the session changes below. This is historical context, not a current health report. The gateway is not defined in this repo. Deploys must leave it in place.
 
 - `GET /` returns **302** to `https://github.com/login/oauth/authorize` with `approval_prompt=force`, scope `user:email read:org`, and callback `https://bc-daylight.staging.adamstuckert.com/oauth2/callback`.
 - The CSRF cookie is `__Host-bcdaylight_staging_csrf` (`Max-Age=900`, `HttpOnly`, `Secure`, `SameSite=Lax`). Sign-in stays limited to the GitHub user already configured on that gateway (`aldervale`).
@@ -65,3 +65,30 @@ Do this once, from a machine already logged into the Fly org that owns `bcdaylig
 ```bash
 curl -sS https://bc-daylight.staging.adamstuckert.com/version
 ```
+
+## Read-only public smoke tests
+
+PR #17's standalone Playwright checks use the existing commit-only `/version`
+contract. They do not replace the more comprehensive post-deploy gateway checker
+or its rollback handling, and are excluded from local/PR browser tests.
+Run them against an already deployed, known commit (no sign-in or browser install
+is required for these API-only tests):
+
+```bash
+STAGING_BASE_URL=https://bc-daylight.staging.adamstuckert.com \
+EXPECTED_SHA='full-40-character-deployed-sha' \
+npx playwright test --config=playwright.staging.config.ts
+```
+
+The config rejects missing SHA values and any other URL before sending requests.
+Do not use the PR head as `EXPECTED_SHA` unless it has separately been deployed.
+
+### Reconciliation of PR #17
+
+The canonical deployment pipeline and `/version` implementation on `master`
+supersede the original PR alternatives. Preserve the `{ "commit": "..." }`
+response, the tested SHA pinned across jobs, fail-closed gateway discovery,
+security/host checks, and rollback of the original machine configuration.
+The alternate `{ "sha", "builtAt" }` response and environment-only gateway
+fallback are intentionally not adopted. The existing `FLY_API_TOKEN_STAGING`
+secret remains unchanged; one-time setup above is for initial provisioning only.
