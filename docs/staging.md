@@ -16,7 +16,14 @@ Baseline checked without signing in on 31 October 2026, before applying the sess
 
 The workflow replaces `/app/build`, `/app/node_modules` and the app package manifests
 in the image that is already running. Dependencies are installed fresh from the
-lockfile with `npm ci --omit=dev`, using the inherited runtime for compatibility.
+lockfile with `npm ci --omit=dev` in a separate official Node 22 Alpine build
+stage, so the gateway does not need npm or build privileges. This cross-image
+copy is restricted to the reviewed pure-JavaScript `driver.js` and `suncalc`
+packages; a changed dependency set, native libraries or symlinks fails closed.
+The build temporarily uses root to replace app files, then restores the original
+image user/group obtained from Docker metadata. The final image user, entrypoint,
+command and working directory are checked against the original before pushing.
+An empty original user maps only to Docker's equivalent root user `0`.
 Old app assets and dependencies are removed before copying, so deleted files and
 development tools cannot survive in the active app tree. Old files can still
 exist in the inherited image's lower layers; this is not a rebuilt gateway image.
@@ -43,6 +50,9 @@ inherited Node version and smoke-tests the refreshed app directly inside the
 overlay image before pushing it. This proves compatibility with the staging
 runtime, not an upgrade of its base image. Separately, CI builds and smoke-tests
 the standalone final Dockerfile image based on a freshly pulled `node:22-alpine`.
+Both CI paths also build the real overlay against a non-root gateway fixture
+with npm removed, verify stale app files are gone and launch metadata is
+unchanged, and run the same app smoke check as that non-root user.
 Updating the gateway's runtime/base image requires a separately reviewed plan
 that preserves its existing OAuth, reverse proxy, session and access settings.
 

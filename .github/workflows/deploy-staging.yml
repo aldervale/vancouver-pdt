@@ -58,6 +58,7 @@ jobs:
           set -euo pipefail
           docker build --pull --build-arg COMMIT_SHA="$COMMIT_SHA" -t bcdaylight-runtime:tested .
           node scripts/smoke-container.mjs bcdaylight-runtime:tested "$COMMIT_SHA"
+          node scripts/smoke-staging-overlay.mjs bcdaylight-runtime:tested "$COMMIT_SHA"
 
   deploy:
     name: Deploy bcdaylight-staging

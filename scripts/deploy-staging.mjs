@@ -11,6 +11,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkStaging, collectObservations } from './check-staging.mjs';
 import { smokeContainer } from './smoke-container.mjs';
+import { assertGatewayImageConfigPreserved, overlayRuntimeUser, runtimeConfigFormat } from './staging-overlay.mjs';
 import { assertIndependentGatewayRuntime, inspectStagingRuntimeSource } from './staging-runtime.mjs';
 import {
   ALLOWED_MACHINE_ENV_KEYS,
@@ -302,10 +303,14 @@ async function buildOverlay(baseImage, work, includeProxyRoot) {
   });
   log('Pulling the current staging image');
   await run('docker', ['pull', '--platform', 'linux/amd64', baseImage]);
+  const baseConfig = JSON.parse((await run('docker', ['image', 'inspect', '--format', runtimeConfigFormat, baseImage], { capture: true })).stdout);
+  const runtimeUser = overlayRuntimeUser(baseConfig);
   log('Building the app and production-dependency overlay (gateway OS and Node are retained)');
-  await run('docker', ['build', '--platform', 'linux/amd64', '--build-arg', `BASE_IMAGE=${baseImage}`, '-t', tag, '.'], {
+  await run('docker', ['build', '--platform', 'linux/amd64', '--build-arg', `BASE_IMAGE=${baseImage}`, '--build-arg', `RUNTIME_USER=${runtimeUser}`, '-t', tag, '.'], {
     cwd: work
   });
+  const overlayConfig = JSON.parse((await run('docker', ['image', 'inspect', '--format', runtimeConfigFormat, tag], { capture: true })).stdout);
+  assertGatewayImageConfigPreserved(baseConfig, overlayConfig);
   await smokeContainer(tag, process.env.COMMIT_SHA, { stagingOverlay: true });
   log('Pushing the staging image');
   const pushed = await run('docker', ['push', tag], { capture: true });

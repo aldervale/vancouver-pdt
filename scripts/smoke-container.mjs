@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { smokeRuntime } from './smoke-runtime.mjs';
 
-function docker(args, input) {
+export function docker(args, input) {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
@@ -36,7 +36,7 @@ export async function smokeContainer(image, sha, { stagingOverlay = false } = {}
     const dependencyCheck = await readFile(new URL('./check-runtime-deps.mjs', import.meta.url), 'utf8');
     // Run the same assertion inside the image; no development checker is installed.
     const result = await docker(['exec', '-i', id, 'node', '--input-type=module'],
-      `${dependencyCheck}\nconsole.log(JSON.stringify(await checkRuntimeDependencies('/app')));\n`);
+      `${dependencyCheck}\nconsole.log(JSON.stringify(await checkRuntimeDependencies('/app', { portable: ${stagingOverlay} })));\n`);
     console.log(`Image runtime dependencies: ${result}`);
     const port = await docker(['port', id, '3000/tcp']);
     assert(/^127\.0\.0\.1:\d+$/.test(port), 'Smoke container must bind only to localhost');

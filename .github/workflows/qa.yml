@@ -45,3 +45,4 @@ jobs:
           sha=$(git rev-parse HEAD)
           docker build --pull --build-arg COMMIT_SHA="$sha" -t bcdaylight-runtime:qa .
           node scripts/smoke-container.mjs bcdaylight-runtime:qa "$sha"
+          node scripts/smoke-staging-overlay.mjs bcdaylight-runtime:qa "$sha"

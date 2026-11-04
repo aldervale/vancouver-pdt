@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { checkRuntimeDependencies } from '../../../scripts/check-runtime-deps.mjs';
+import { assertGatewayImageConfigPreserved, overlayRuntimeUser } from '../../../scripts/staging-overlay.mjs';
 import { assertIndependentGatewayRuntime, hasUnsafeModuleEnvironment, inspectGatewayWrapper, inspectStagingRuntimeSource } from '../../../scripts/staging-runtime.mjs';
 
 const directories: string[] = [];
@@ -32,7 +33,19 @@ describe('production runtime package checks', () => {
     const root = await dependencyFixture();
     expect((await checkRuntimeDependencies(root)).packages).toEqual(['node_modules/suncalc']);
   });
-  it('rejects leftover development packages', async () => {
+  it('fails portability checks on added packages or native binaries', async () => {
+    const root = await dependencyFixture();
+    await expect(checkRuntimeDependencies(root, { portable: true })).rejects.toThrow('portable dependency set changed');
+    const lock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'));
+    lock.packages['node_modules/driver.js'] = { version: '1.4.0' };
+    await writeFile(resolve(root, 'package-lock.json'), JSON.stringify(lock));
+    await mkdir(resolve(root, 'node_modules/driver.js'));
+    await writeFile(resolve(root, 'node_modules/driver.js/package.json'), JSON.stringify({ version: '1.4.0' }));
+    await expect(checkRuntimeDependencies(root, { portable: true })).resolves.toMatchObject({ packages: ['node_modules/driver.js', 'node_modules/suncalc'] });
+    await writeFile(resolve(root, 'node_modules/suncalc/native.node'), 'not portable');
+    await expect(checkRuntimeDependencies(root, { portable: true })).rejects.toThrow('Native runtime dependency');
+  });
+  it('rejects leftover development packages' , async () => {
     const root = await dependencyFixture();
     await mkdir(resolve(root, 'node_modules/vite'));
     await writeFile(resolve(root, 'node_modules/vite/package.json'), JSON.stringify({ version: '6.0.0' }));
@@ -133,6 +146,29 @@ describe('staging gateway runtime guard', () => {
   });
 });
 
+describe('staging image runtime identity', () => {
+  const config = { User: 'node', Entrypoint: ['node'], Cmd: ['/infra/supervisor.mjs'], WorkingDir: '/app' };
+  it('restores the exact non-root user/group and treats only an empty default as root', () => {
+    for (const user of ['node', '1001', 'node:node', '1001:1002', '0', 'root']) {
+      expect(overlayRuntimeUser({ User: user })).toBe(user);
+    }
+    expect(overlayRuntimeUser({ User: '' })).toBe('0');
+    expect(() => assertGatewayImageConfigPreserved(config, { ...config })).not.toThrow();
+    expect(() => assertGatewayImageConfigPreserved({ ...config, User: '' }, { ...config, User: '0' })).not.toThrow();
+    expect(() => assertGatewayImageConfigPreserved(config, { ...config, User: '0' })).toThrow('runtime user');
+  });
+  it('rejects unvalidated user arguments and changed launch metadata without exposing commands', () => {
+    for (const user of [undefined, null, 'node; id', '-1', 'node\nUSER 0', '${INJECT}', 'node:group:extra']) {
+      expect(() => overlayRuntimeUser({ User: user })).toThrow();
+    }
+    for (const key of ['Entrypoint', 'Cmd', 'WorkingDir']) {
+      expect(() => assertGatewayImageConfigPreserved(config, { ...config, [key]: 'private-command-value' })).toThrow(`changed gateway ${key}`);
+      try { assertGatewayImageConfigPreserved(config, { ...config, [key]: 'private-command-value' }); }
+      catch (error) { expect(String(error)).not.toContain('private-command-value'); }
+    }
+  });
+});
+
 describe('container workflow wiring', () => {
   it('builds a separate production dependency tree and preserves commit provenance', async () => {
     const file = await readFile('Dockerfile', 'utf8');
@@ -147,7 +183,11 @@ describe('container workflow wiring', () => {
   it('clears old staging assets/dependencies while preserving the gateway image', async () => {
     const overlay = await readFile('deploy/staging/Dockerfile.overlay', 'utf8');
     expect(overlay).toContain('FROM ${BASE_IMAGE}');
+    expect(overlay).toContain('FROM node:22-alpine AS production-dependencies');
     expect(overlay).toContain('npm ci --omit=dev');
+    expect(overlay).toContain('/runtime-install --portable');
+    expect(overlay).toContain('USER 0');
+    expect(overlay.trim()).toMatch(/USER \$\{RUNTIME_USER\}$/);
     expect(overlay).toContain('RUN rm -rf /app/build /app/node_modules');
     expect(overlay).toContain('/app/node_modules/');
     expect(overlay).toContain('ENV ORIGIN=https://bc-daylight.staging.adamstuckert.com');
@@ -155,6 +195,8 @@ describe('container workflow wiring', () => {
     const deploy = await readFile('scripts/deploy-staging.mjs', 'utf8');
     expect(deploy.indexOf('assertIndependentGatewayRuntime(runtime,')).toBeGreaterThanOrEqual(0);
     expect(deploy.indexOf('assertIndependentGatewayRuntime(runtime,')).toBeLessThan(deploy.indexOf('const image = await buildOverlay'));
+    expect(deploy).toContain('RUNTIME_USER=${runtimeUser}');
+    expect(deploy.indexOf('assertGatewayImageConfigPreserved(baseConfig, overlayConfig)')).toBeLessThan(deploy.indexOf('await smokeContainer(tag'));
     expect(deploy.indexOf('await smokeContainer(tag')).toBeLessThan(deploy.indexOf("log('Pushing the staging image')"));
   });
   it('gates QA and staging on actual final-image smoke tests', async () => {
@@ -162,6 +204,7 @@ describe('container workflow wiring', () => {
       const workflow = await readFile(path, 'utf8');
       expect(workflow).toContain('docker build --pull --build-arg COMMIT_SHA=');
       expect(workflow).toContain('node scripts/smoke-container.mjs');
+      expect(workflow).toContain('node scripts/smoke-staging-overlay.mjs');
     }
   });
 });
