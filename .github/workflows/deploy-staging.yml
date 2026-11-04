@@ -48,6 +48,7 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- --workers=2
+      - run: npm run test:preview-security -- --workers=2
 
   deploy:
     name: Deploy bcdaylight-staging

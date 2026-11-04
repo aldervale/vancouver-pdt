@@ -98,3 +98,11 @@ Staging is Fly app `bcdaylight-staging` at [bc-daylight.staging.adamstuckert.com
 ## License
 
 MIT — see [LICENSE](./LICENSE)
+
+## Response security
+
+Production security headers, SvelteKit CSP, non-blocking font loading and the
+`www` → apex redirect are described in [docs/security-headers.md](docs/security-headers.md).
+The browser suite runs against the real Node build; `npm run test:preview-security`
+checks the same API headers in Vite preview. Public TLS/deployed-header checks are
+still required after an authorized production deployment.
