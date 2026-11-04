@@ -1,6 +1,17 @@
-# Copy the tested SvelteKit build onto the image already running on
-# bcdaylight-staging. The gateway, host rules, and response headers stay in
-# the lower layers. Do not point this file at the production app.
+# Preserve the running gateway's OS, Node binary, entrypoint and configuration.
+# Only the app build and lockfile-installed production dependency tree change.
 ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS production-dependencies
+WORKDIR /runtime-install
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY check-runtime-deps.mjs /tmp/check-runtime-deps.mjs
+RUN node /tmp/check-runtime-deps.mjs /runtime-install
+
 FROM ${BASE_IMAGE}
+ENV ORIGIN=https://bc-daylight.staging.adamstuckert.com
+# Clearing first prevents removed assets or old development packages surviving.
+RUN rm -rf /app/build /app/node_modules
 COPY app-build/ /app/build/
+COPY --from=production-dependencies /runtime-install/node_modules/ /app/node_modules/
+COPY package*.json /app/

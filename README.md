@@ -77,7 +77,7 @@ npm run test:e2e     # end-to-end tests (Playwright)
 
 The app uses `@sveltejs/adapter-node`. The repository's `fly.toml` targets production app `vancouver-pdt` ([bcdaylight.ca](https://bcdaylight.ca)). Production stays a manual `fly deploy` and is not part of the staging workflow.
 
-Staging is Fly app `bcdaylight-staging` at [bc-daylight.staging.adamstuckert.com](https://bc-daylight.staging.adamstuckert.com). Pushing the tested commit to the `staging` branch deploys that app only. The workflow keeps the gateway already running there and copies the new site build over `/app/build`. See [docs/staging.md](docs/staging.md).
+Staging is Fly app `bcdaylight-staging` at [bc-daylight.staging.adamstuckert.com](https://bc-daylight.staging.adamstuckert.com). Pushing the tested commit to the `staging` branch deploys that app only. The workflow keeps the gateway already running there and refreshes `/app/build` plus the lockfile-installed production dependencies. The gateway OS and Node binary are retained; the standalone production image is built and smoke-tested separately in CI. See [docs/staging.md](docs/staging.md).
 
 ---
 
@@ -98,6 +98,29 @@ Staging is Fly app `bcdaylight-staging` at [bc-daylight.staging.adamstuckert.com
 ## License
 
 MIT — see [LICENSE](./LICENSE)
+
+## Runtime image
+
+The multi-stage Dockerfile installs production dependencies with `npm ci --omit=dev`
+in a separate stage. Build tools are bundled only where the app build needs them;
+the builder's `node_modules` is never copied into the final image. Development
+framework packages can still contribute bundled code, so a production-only npm
+audit is not a substitute for auditing the complete lockfile.
+
+```bash
+sha=$(git rev-parse HEAD)
+docker build --pull --build-arg COMMIT_SHA="$sha" -t bcdaylight-runtime:local .
+node scripts/smoke-container.mjs bcdaylight-runtime:local "$sha"
+```
+
+The image defaults `ORIGIN=https://bcdaylight.ca` to avoid deriving server-side
+URLs from arbitrary Host headers; an explicit runtime environment can override
+it for another deployment. Staging sets its own fixed origin.
+
+The smoke check uses the actual image with no bind mounts or host dependencies.
+It verifies the installed packages against the lockfile, SSR chart/map markup,
+client assets, security headers and the exact commit-only `/version` response.
+The browser suite separately exercises chart and map interactions.
 
 ## Response security
 

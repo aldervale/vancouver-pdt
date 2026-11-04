@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Deploy the tested build to Fly app bcdaylight-staging only.
- * Overlays /app/build onto the running image so the gateway stays.
+ * Refreshes /app/build and production dependencies; keeps the gateway runtime.
  * Does not release a new app config and does not target production.
  */
 
@@ -10,6 +10,8 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkStaging, collectObservations } from './check-staging.mjs';
+import { smokeContainer } from './smoke-container.mjs';
+import { assertIndependentGatewayRuntime, inspectStagingRuntimeSource } from './staging-runtime.mjs';
 import {
   ALLOWED_MACHINE_ENV_KEYS,
   STAGING_APP,
@@ -300,10 +302,11 @@ async function buildOverlay(baseImage, work, includeProxyRoot) {
   });
   log('Pulling the current staging image');
   await run('docker', ['pull', '--platform', 'linux/amd64', baseImage]);
-  log('Building the /app/build overlay');
+  log('Building the app and production-dependency overlay (gateway OS and Node are retained)');
   await run('docker', ['build', '--platform', 'linux/amd64', '--build-arg', `BASE_IMAGE=${baseImage}`, '-t', tag, '.'], {
     cwd: work
   });
+  await smokeContainer(tag, process.env.COMMIT_SHA, { stagingOverlay: true });
   log('Pushing the staging image');
   const pushed = await run('docker', ['push', tag], { capture: true });
   const inspected = await run(
@@ -370,6 +373,9 @@ async function deploy() {
     log(`Before-probe skipped (${error instanceof Error ? error.message : 'request failed'})`);
   }
 
+  const runtime = JSON.parse(await execMachine(machine.id, ['node', '--input-type=module', '--eval', inspectStagingRuntimeSource]));
+  const inheritedNode = assertIndependentGatewayRuntime(runtime);
+  log(`Staging gateway Node runtime retained: ${inheritedNode}`);
   const gatewayFiles = await readGatewayConfigFiles(machine.id);
   const work = resolve(root, 'deploy/staging/.overlay');
   try {
@@ -385,6 +391,10 @@ async function deploy() {
       await rm(work, { recursive: true, force: true });
       await mkdir(resolve(work, 'app-build'), { recursive: true });
       await run('cp', ['-a', `${resolve(root, 'build')}/.`, resolve(work, 'app-build')]);
+      for (const name of ['package.json', 'package-lock.json']) {
+        await writeFile(resolve(work, name), await readFile(resolve(root, name)));
+      }
+      await writeFile(resolve(work, 'check-runtime-deps.mjs'), await readFile(resolve(root, 'scripts/check-runtime-deps.mjs')));
       const pending = prepared.files.filter((file) => file.changed).length;
       const changed = await writePatchedProxyRoot(work, prepared.files);
       if (changed !== pending) {

@@ -45,10 +45,19 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Testing $sha"
       - run: npm ci
+      - name: Require zero production dependency advisories
+        run: npm audit --omit=dev
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- --workers=2
       - run: npm run test:preview-security -- --workers=2
+      - name: Build and smoke the standalone production-only image
+        env:
+          COMMIT_SHA: ${{ steps.pin.outputs.sha }}
+        run: |
+          set -euo pipefail
+          docker build --pull --build-arg COMMIT_SHA="$COMMIT_SHA" -t bcdaylight-runtime:tested .
+          node scripts/smoke-container.mjs bcdaylight-runtime:tested "$COMMIT_SHA"
 
   deploy:
     name: Deploy bcdaylight-staging
@@ -75,6 +84,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Require zero production dependency advisories
+        run: npm audit --omit=dev
       - name: Build with the tested commit baked into /version
         env:
           COMMIT_SHA: ${{ needs.test.outputs.sha }}
@@ -86,7 +97,7 @@ jobs:
           fi
           npm run build
           grep -R -a -q "\"$COMMIT_SHA\"" build
-      - name: Deploy the overlay to bcdaylight-staging
+      - name: Deploy app and production dependencies to bcdaylight-staging
         id: deploy
         env:
           FLY_API_TOKEN_STAGING: ${{ secrets.FLY_API_TOKEN_STAGING }}
