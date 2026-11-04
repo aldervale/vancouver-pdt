@@ -2,7 +2,7 @@
 
 ## Result and scope
 
-Applied `npm audit fix` without `--force`. Existing `package.json` ranges are unchanged; `package-lock.json` contains the updates. Adapter-node remains on major 5 and SvelteKit on major 2. This is not a claim that all upstream advisories are fixed: several recent advisories are missing from npm's audit response, as detailed below.
+Applied `npm audit fix` without `--force`. The security fixes preserve existing version ranges; `package-lock.json` contains those updates. Acorn 8.19.0, already in the locked development tree, is now a direct dev-only dependency for syntax-aware validation of the staging supervisor. It is not installed in either production dependency tree. Adapter-node remains on major 5 and SvelteKit on major 2. This is not a claim that all upstream advisories are fixed: several recent advisories are missing from npm's audit response, as detailed below.
 
 | Audit snapshot | Low | Moderate | High | Critical | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |

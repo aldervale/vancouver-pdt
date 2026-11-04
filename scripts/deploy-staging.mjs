@@ -374,7 +374,7 @@ async function deploy() {
   }
 
   const runtime = JSON.parse(await execMachine(machine.id, ['node', '--input-type=module', '--eval', inspectStagingRuntimeSource]));
-  const inheritedNode = assertIndependentGatewayRuntime(runtime);
+  const inheritedNode = assertIndependentGatewayRuntime(runtime, (diagnostic) => log(`Gateway runtime inspection: ${JSON.stringify(diagnostic)}`));
   log(`Staging gateway Node runtime retained: ${inheritedNode}`);
   const gatewayFiles = await readGatewayConfigFiles(machine.id);
   const work = resolve(root, 'deploy/staging/.overlay');

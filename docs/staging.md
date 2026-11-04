@@ -24,8 +24,13 @@ It does not build a replacement proxy and does not apply `fly.toml`.
 
 Before replacing the shared dependency tree, the deploy inspects running Node
 entrypoints. The app must run `/app/build`; separate Node wrappers must be readable
-and use only simple Node builtin imports. Unknown invocations, dynamic loaders,
-local/package imports or a second Node binary stop the deploy for inspection.
+and use only static Node builtin imports. The parser ignores comments and string
+contents, permits local named function exports and `import.meta.url`, and rejects
+dynamic loaders, re-exports and local/package imports. The existing numeric
+`--max-old-space-size` Node option is allowed; preload/loader options and
+`NODE_PATH` are refused. Unknown invocations or a second Node binary also stop
+the deploy for inspection. Diagnostics contain only bounded entrypoint paths,
+a source digest, known builtin import names and fixed loader classifications.
 No process environment or wrapper source is written to the job log.
 
 The app image defaults `ORIGIN=https://bc-daylight.staging.adamstuckert.com`,
