@@ -1,0 +1,91 @@
+import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { get, createServer } from 'node:http';
+
+export async function checkReadiness(targets = ['http://127.0.0.1:3000/', 'http://127.0.0.1:4180/ready'], deadline = 1000) {
+  const results = await Promise.all(targets.map(target => new Promise(resolve => {
+    const request = get(target, { headers: { Host: 'bc-daylight.staging.adamstuckert.com' } });
+    const timer = setTimeout(() => { request.destroy(); resolve(false); }, deadline);
+    request.on('response', response => {
+      clearTimeout(timer);
+      resolve(response.statusCode === 200);
+      response.destroy();
+    });
+    request.on('error', () => { clearTimeout(timer); resolve(false); });
+  })));
+  return results.length === 2 && results.every(Boolean);
+}
+
+const host = 'bc-daylight.staging.adamstuckert.com';
+export function readinessServer(check = checkReadiness) {
+  let pending;
+  return createServer(async (request, response) => {
+    if (request.url !== '/ready' || !['GET', 'HEAD'].includes(request.method)) {
+      response.writeHead(404).end();
+      return;
+    }
+    pending ??= Promise.resolve().then(check).catch(() => false).finally(() => { pending = undefined; });
+    const ready = await pending;
+    response.writeHead(ready ? 200 : 503, { 'Cache-Control': 'no-store', 'Content-Length': '0' }).end();
+  });
+}
+
+export function launchPlan(env) {
+  const user = env.STAGING_GITHUB_USER || '';
+  const cookie = env.OAUTH2_PROXY_COOKIE_SECRET || '';
+  const client = env.OAUTH2_PROXY_CLIENT_ID || '';
+  const secret = env.OAUTH2_PROXY_CLIENT_SECRET || '';
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(user)
+      || /placeholder|replace|verified-login/i.test(user)
+      || !client || !secret || /[\r\n]/.test(client + secret)
+      || !/^[A-Za-z0-9+/]{43}=$/.test(cookie)
+      || Buffer.from(cookie, 'base64').length !== 32) {
+    throw new Error('Invalid staging configuration');
+  }
+  const base = { PATH: '/usr/local/bin:/usr/sbin:/usr/bin:/bin', HOME: '/tmp' };
+  return [
+    { command: '/usr/local/bin/node', args: ['build'], env: {
+      ...base, NODE_ENV: 'production', HOST: '127.0.0.1', PORT: '3000',
+      ORIGIN: `https://${host}`, NODE_OPTIONS: '--max-old-space-size=96',
+    } },
+    { command: '/usr/local/bin/oauth2-proxy', args: ['--config=/infra/oauth2-proxy.cfg'], env: {
+      ...base, OAUTH2_PROXY_GITHUB_USERS: user, OAUTH2_PROXY_CLIENT_ID: client,
+      OAUTH2_PROXY_CLIENT_SECRET: secret, OAUTH2_PROXY_COOKIE_SECRET: Buffer.from(cookie, 'base64').toString('base64url'),
+    } },
+    { command: '/usr/sbin/nginx', args: ['-c', '/infra/nginx.conf', '-g', 'daemon off;'], env: base },
+  ];
+}
+
+// Runtime sketch: PID 1 owns all children. No child is launched when imported by tests.
+// Requires container integration testing for signals, OOM, and cold starts.
+function main() {
+  let plan;
+  try { plan = launchPlan(process.env); }
+  catch { console.error('Invalid staging configuration; refusing startup'); process.exit(78); }
+  const children = [];
+  const readiness = readinessServer();
+  let stopping = false;
+  const stop = (code) => {
+    if (stopping) return;
+    stopping = true;
+    readiness.close();
+    for (const child of children) child.kill('SIGTERM');
+    setTimeout(() => {
+      for (const child of children) child.kill('SIGKILL');
+      process.exit(code);
+    }, 5000);
+  };
+  process.on('SIGTERM', () => stop(0));
+  process.on('SIGINT', () => stop(0));
+  readiness.on('error', () => { console.error('Readiness listener failed'); stop(1); });
+  readiness.listen(4181, '127.0.0.1');
+  for (const spec of plan) {
+    const child = spawn(spec.command, spec.args, {
+      cwd: '/app', env: spec.env, stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    children.push(child);
+    child.on('error', () => { console.error('Staging child could not start'); stop(1); });
+    child.on('exit', () => { if (!stopping) console.error('Staging child exited'); stop(1); });
+  }
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

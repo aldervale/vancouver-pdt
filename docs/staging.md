@@ -14,7 +14,47 @@ Baseline checked without signing in on 31 October 2026, before applying the sess
 - These headers are on those responses: `strict-transport-security: max-age=86400`, `x-robots-tag: noindex, nofollow, noarchive`, `cache-control: no-store`. The GitHub redirect also sends `expires: Thu, 01 Jan 1970 00:00:00 UTC`.
 - Any other Host is rejected with **421**. That includes `Host: not-allowed.example` on the staging TLS connection and `https://bcdaylight-staging.fly.dev/`.
 
-The workflow copies the new build onto `/app/build` in the image that is already running. It does not build a replacement proxy and it does not apply `fly.toml`.
+The workflow replaces `/app/build`, `/app/node_modules` and the app package manifests
+in the image that is already running. Dependencies are installed fresh from the
+lockfile with `npm ci --omit=dev` in a separate official Node 22 Alpine build
+stage, so the gateway does not need npm or build privileges. This cross-image
+copy is restricted to the reviewed pure-JavaScript `driver.js` and `suncalc`
+packages; a changed dependency set, native libraries or symlinks fails closed.
+The build temporarily uses root to replace app files, then restores the original
+image user/group obtained from Docker metadata. The final image user, entrypoint,
+command and working directory are checked against the original before pushing.
+An empty original user maps only to Docker's equivalent root user `0`.
+Old app assets and dependencies are removed before copying, so deleted files and
+development tools cannot survive in the active app tree. Old files can still
+exist in the inherited image's lower layers; this is not a rebuilt gateway image.
+It does not build a replacement proxy and does not apply `fly.toml`.
+
+Before replacing the shared dependency tree, the deploy inspects running Node
+entrypoints. The app must run `/app/build`; separate Node wrappers must be readable
+and use only static Node builtin imports. The parser ignores comments and string
+contents, permits local named function exports and `import.meta.url`, and rejects
+dynamic loaders, re-exports and local/package imports. The existing numeric
+`--max-old-space-size` Node option is allowed; preload/loader options and
+`NODE_PATH` are refused. Unknown invocations or a second Node binary also stop
+the deploy for inspection. Diagnostics contain only bounded entrypoint paths,
+a source digest, known builtin import names and fixed loader classifications.
+No process environment or wrapper source is written to the job log.
+
+The app image defaults `ORIGIN=https://bc-daylight.staging.adamstuckert.com`,
+so SvelteKit does not derive its server origin from arbitrary request headers.
+Existing machine environment is not rewritten; an explicit runtime `ORIGIN` can
+override this image default. OAuth and host restrictions remain gateway-owned.
+
+The staging gateway **OS and Node binary stay unchanged**. The job reports that
+inherited Node version and smoke-tests the refreshed app directly inside the
+overlay image before pushing it. This proves compatibility with the staging
+runtime, not an upgrade of its base image. Separately, CI builds and smoke-tests
+the standalone final Dockerfile image based on a freshly pulled `node:22-alpine`.
+Both CI paths also build the real overlay against a non-root gateway fixture
+with npm removed, verify stale app files are gone and launch metadata is
+unchanged, and run the same app smoke check as that non-root user.
+Updating the gateway's runtime/base image requires a separately reviewed plan
+that preserves its existing OAuth, reverse proxy, session and access settings.
 
 ## What the deploy changes
 
@@ -24,7 +64,7 @@ The workflow copies the new build onto `/app/build` in the image that is already
 
 ## Deploy
 
-GitHub Actions runs the unit tests and the browser tests, then deploys that same commit. A manual run resolves the **ref** input to a commit before those tests, and the deploy job checks that commit out again.
+GitHub Actions runs the unit tests, browser tests and standalone container smoke test, then deploys that same commit. A manual run resolves the **ref** input to a commit before those tests, and the deploy job checks that commit out again.
 
 ```bash
 git push origin <full-40-character-sha>:staging
@@ -38,7 +78,7 @@ The job fails if any of these are untrue after the deploy:
 - a disallowed Host is still rejected with 421
 - `/ping`, `/ready`, and the gateway `robots.txt` still answer as they do now, and `/og.png` stays behind sign-in
 
-If the running gateway config cannot be read or patched, the job fails before building an image or updating the machine. Session environment variables are not a fallback, because the Node supervisor does not apply them. If a check fails after the machine was updated, the job puts back the previous image, the previous command fields (including `init.cmd`), and the previous session env.
+If the gateway wrapper depends on the app dependency tree, or the running gateway config cannot be read or patched, the job fails before building an image or updating the machine. Session environment variables are not a fallback, because the Node supervisor does not apply them. If a check fails after the machine was updated, the job puts back the previous image, the previous command fields (including `init.cmd`), and the previous session env.
 
 ## One-time setup
 

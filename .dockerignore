@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+build
+.svelte-kit
+test-results
+playwright-report
+.npmrc
+.env
+.env.*
+*.log
+deploy/staging/.overlay
+deploy/staging/.rollback.json

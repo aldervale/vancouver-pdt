@@ -1,6 +1,22 @@
-# Copy the tested SvelteKit build onto the image already running on
-# bcdaylight-staging. The gateway, host rules, and response headers stay in
-# the lower layers. Do not point this file at the production app.
+# Preserve the running gateway's OS, Node binary, entrypoint and configuration.
+# Only the app build and lockfile-installed production dependency tree change.
 ARG BASE_IMAGE
+# The gateway is minimal: it may have no npm and may run as a non-root user.
+FROM node:22-alpine AS production-dependencies
+WORKDIR /runtime-install
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY check-runtime-deps.mjs /tmp/check-runtime-deps.mjs
+RUN node /tmp/check-runtime-deps.mjs /runtime-install --portable
+
 FROM ${BASE_IMAGE}
+ARG RUNTIME_USER
+ENV ORIGIN=https://bc-daylight.staging.adamstuckert.com
+# Root is used only while building; restore the exact inspected runtime user.
+USER 0
+# Clearing first prevents removed assets or old development packages surviving.
+RUN rm -rf /app/build /app/node_modules
 COPY app-build/ /app/build/
+COPY --from=production-dependencies /runtime-install/node_modules/ /app/node_modules/
+COPY package*.json /app/
+USER ${RUNTIME_USER}

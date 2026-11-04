@@ -16,6 +16,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Require zero production dependency advisories
+        run: npm audit --omit=dev
       - run: npm run build
       - run: npm test
       - run: npx playwright install --with-deps chromium
@@ -27,3 +29,20 @@ jobs:
           name: browser-test-results
           path: test-results/
           retention-days: 7
+
+  container:
+    name: Production image smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and smoke the final production-only image
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          docker build --pull --build-arg COMMIT_SHA="$sha" -t bcdaylight-runtime:qa .
+          node scripts/smoke-container.mjs bcdaylight-runtime:qa "$sha"
+          node scripts/smoke-staging-overlay.mjs bcdaylight-runtime:qa "$sha"
